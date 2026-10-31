@@ -1,0 +1,26 @@
+# Dependency
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Log
+*.log
+
+# Editor
+.idea/
+.vscode/
+.impeccable/
+.freebuff/
+.gemini/
+.serena/
+
+# OS
+Thumbs.db
+desktop.ini
