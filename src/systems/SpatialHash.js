@@ -1,28 +1,20 @@
-// Spasial hash grid — O(1) enemy lookup
+// Spatial hash grid — integer key (tanpa alokasi string), zero-alloc queryInto
 export class SpatialHash {
   constructor(cellSize = 4) {
     this.cellSize = cellSize;
     this.buckets = new Map();
   }
-  _key(x, z) { return `${Math.floor(x / this.cellSize)},${Math.floor(z / this.cellSize)}`; }
+  // Kunci numerik (dulu template string per insert -> alokasi per frame)
+  _key(cx, cz) { return cx * 4096 + cz; }
   clear() { this.buckets.clear(); }
   insert(id, x, z, data) {
-    const k = this._key(x, z);
-    if (!this.buckets.has(k)) this.buckets.set(k, []);
-    this.buckets.get(k).push({ id, data });
+    const cs = this.cellSize;
+    const k = this._key(Math.floor(x / cs), Math.floor(z / cs));
+    let b = this.buckets.get(k);
+    if (!b) { b = []; this.buckets.set(k, b); }
+    b.push(data); // simpan ref langsung, tanpa wrapper {id,data}
   }
-  remove(id) {
-    for (const [, bucket] of this.buckets) {
-      const i = bucket.findIndex(e => e.id === id);
-      if (i > -1) { bucket.splice(i, 1); return; }
-    }
-  }
-  query(x, z, range) {
-    const res = [];
-    this.queryInto(x, z, range, res);
-    return res;
-  }
-  // Zero-alloc: isi array existing (riset 2026 — hindari alokasi per frame)
+  // Zero-alloc: isi array existing
   queryInto(x, z, range, out) {
     out.length = 0;
     const cs = this.cellSize;
@@ -32,7 +24,7 @@ export class SpatialHash {
     const maxCz = Math.floor((z + range) / cs);
     for (let cx = minCx; cx <= maxCx; cx++) {
       for (let cz = minCz; cz <= maxCz; cz++) {
-        const bucket = this.buckets.get(cx + "," + cz);
+        const bucket = this.buckets.get(this._key(cx, cz));
         if (bucket) for (let i = 0; i < bucket.length; i++) out.push(bucket[i]);
       }
     }

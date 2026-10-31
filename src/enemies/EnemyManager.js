@@ -1,6 +1,5 @@
 import * as THREE from 'three/webgpu';
 import { Events } from '../engine/EventBus.js';
-import { addOutline } from '../systems/CelOutline.js';
 import { SpatialHash } from '../systems/SpatialHash.js';
 
 const BASE_TYPES = {
@@ -36,6 +35,37 @@ export class EnemyManager {
     this._hash = new SpatialHash(3);
     this._neighbors = [];
 
+    // === HEALTH SHARD POOL (Quake-style momentum economy) ===
+    // Kill dekat menjatuhkan shard: memaksa pemain maju ke dalam horde, bukan kiting pasif
+    this._shardPool = [];
+    const shardGeo = new THREE.OctahedronGeometry(0.22, 0);
+    const shardMat = new THREE.MeshStandardMaterial({
+      color: 0x44ffaa, emissive: 0x44ffaa, emissiveIntensity: 1.1, flatShading: true
+    });
+    for (let i = 0; i < 24; i++) {
+      const mesh = new THREE.Mesh(shardGeo, shardMat);
+      mesh.visible = false;
+      this.scene.add(mesh);
+      this._shardPool.push({ mesh, alive: false, life: 0, heal: 0, bob: Math.random() * 6.28 });
+    }
+    this._shards = [];
+
+    // === SPAWN TELEGRAPH RING POOL (0.8s warning) ===
+    this._telegraphPool = [];
+    const ringGeo = new THREE.RingGeometry(0.5, 1.2, 24);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xff3355, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false
+    });
+    for (let i = 0; i < 12; i++) {
+      const mesh = new THREE.Mesh(ringGeo, ringMat.clone());
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.visible = false;
+      this.scene.add(mesh);
+      this._telegraphPool.push({ mesh, alive: false, t: 0, dur: 0.8, type: null, hpScale: 1, spdScale: 1, x: 0, z: 0 });
+    }
+    this._telegraphs = [];
+    this._tickAccum = 0;
+
     // Cache geometry & material template per tipe — zero alloc saat spawn
     // (riset 2026: GC pause = micro-stutter; material di-clone per enemy untuk hit-flash)
     this._geoCache = {
@@ -47,8 +77,8 @@ export class EnemyManager {
     };
     this._matTemplates = {};
     for (const [id, def] of Object.entries(BASE_TYPES)) {
-      this._matTemplates[id] = new THREE.MeshStandardMaterial({
-        color: def.color, roughness: 0.7, flatShading: true,
+      this._matTemplates[id] = new THREE.MeshLambertMaterial({
+        color: def.color, flatShading: true,
         emissive: def.color, emissiveIntensity: 0.1
       });
     }
@@ -71,6 +101,7 @@ export class EnemyManager {
     this._strafe = new THREE.Vector3();
     this._sep = new THREE.Vector3();
     this._up = new THREE.Vector3(0, 1, 0);
+    this._tempPos = new THREE.Vector3();
   }
 
   reset() {
@@ -84,6 +115,10 @@ export class EnemyManager {
     for (const p of this._projPool) { p.alive = false; p.mesh.visible = false; }
     this.enemyProjectiles.length = 0;
     this._hash.clear();
+    for (const s of this._shardPool) { s.alive = false; s.mesh.visible = false; }
+    this._shards.length = 0;
+    for (const tg of this._telegraphPool) { tg.alive = false; tg.mesh.visible = false; }
+    this._telegraphs.length = 0;
   }
 
   startWave(wave) {
@@ -107,16 +142,41 @@ export class EnemyManager {
 
   update(dt, player, weaponSystem) {
     this._player = player;
-    // Spawn
+    // Spawn — lewat TELEGRAF 0.8s, bukan pop-in mendadak (fairness, riset 2026)
     if (this.spawning && this.spawnQueue.length > 0) {
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
         const s = this.spawnQueue.shift();
-        this._spawnEnemy(s.type, player, s.hpScale, s.spdScale);
+        this._queueTelegraph(s, player);
         this.spawnTimer = s.delay;
       }
     }
     if (this.spawnQueue.length === 0) this.spawning = false;
+
+    // Update telegraf -> spawn saat selesai
+    this._tickAccum -= dt;
+    const tickNow = this._tickAccum <= 0;
+    if (tickNow) this._tickAccum = 0.22;
+    if (tickNow && this._telegraphs.length > 0) this.audio.playSpawnTick(); // sekali per tick, bukan per telegraf
+    for (let i = this._telegraphs.length - 1; i >= 0; i--) {
+      const tg = this._telegraphs[i];
+      tg.t += dt;
+      const k = tg.t / tg.dur;
+      // Ring mengecil + makin terang = sinyal "musuh muncul di sini"
+      const scale = 1 + (1 - k) * 1.4;
+      tg.mesh.scale.set(scale, scale, 1);
+      tg.mesh.material.opacity = 0.25 + k * 0.7;
+      if (k >= 1) {
+        tg.alive = false;
+        tg.mesh.visible = false;
+        this._spawnEnemy(tg.type, player, tg.hpScale, tg.spdScale, tg.x, tg.z);
+        const idx = this._telegraphs.indexOf(tg);
+        if (idx > -1) this._telegraphs.splice(idx, 1);
+      }
+    }
+
+    // Update shard (bob + magnet + pickup)
+    this._updateShards(dt, player);
 
     // Spatial hash rebuild — O(n) per frame
     this._hash.clear();
@@ -144,7 +204,7 @@ export class EnemyManager {
       const a = this.aliveEnemies[i];
       const list = this._hash.queryInto(a.mesh.position.x, a.mesh.position.z, a.size * 2.4, this._neighbors);
       for (let j = 0; j < list.length; j++) {
-        const b = list[j].data;
+        const b = list[j];
         if (b === a || !b.alive) continue;
         if (a.mesh.userData.enemyId >= b.mesh.userData.enemyId) continue; // proses pasangan sekali
         const dx = b.mesh.position.x - a.mesh.position.x;
@@ -164,17 +224,88 @@ export class EnemyManager {
     this._updateProjectiles(dt, player);
   }
 
-  _spawnEnemy(type, player, hpScale = 1, spdScale = 1) {
-    const def = BASE_TYPES[type];
+  // Antri telegraf: posisi dipilih SEKARANG (aturan adil), spawn 0.8s kemudian
+  _queueTelegraph(s, player) {
+    const tg = this._telegraphPool.find(t => !t.alive);
+    if (!tg) { this._spawnEnemy(s.type, player, s.hpScale, s.spdScale); return; }
+    const def = BASE_TYPES[s.type];
     const pos = this._findSpawnPos(player, def.size);
+    tg.alive = true;
+    tg.t = 0;
+    tg.type = s.type;
+    tg.hpScale = s.hpScale;
+    tg.spdScale = s.spdScale;
+    tg.x = pos.x;
+    tg.z = pos.z;
+    tg.mesh.position.set(pos.x, 0.03, pos.z);
+    tg.mesh.scale.set(1, 1, 1);
+    tg.mesh.material.opacity = 0.25;
+    tg.mesh.visible = true;
+    this._telegraphs.push(tg);
+  }
+
+  // Health shard: bob, magnet dalam 4 m, pickup -> player.heal
+  _updateShards(dt, player) {
+    for (let i = this._shards.length - 1; i >= 0; i--) {
+      const sh = this._shards[i];
+      sh.life -= dt;
+      sh.bob += dt * 4;
+      if (sh.life <= 0) {
+        sh.alive = false; sh.mesh.visible = false;
+        this._shards.splice(i, 1);
+        continue;
+      }
+      sh.mesh.rotation.y += dt * 2.5;
+      // Magnet: tarik ke pemain jika dalam 4 m
+      const dx = player.position.x - sh.mesh.position.x;
+      const dy = (player.position.y + 0.6) - sh.mesh.position.y;
+      const dz = player.position.z - sh.mesh.position.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < 16) {
+        const d = Math.sqrt(d2) || 1;
+        const pull = (1 - d / 4) * 14 * dt;
+        sh.mesh.position.x += (dx / d) * pull;
+        sh.mesh.position.y += (dy / d) * pull;
+        sh.mesh.position.z += (dz / d) * pull;
+      } else {
+        sh.mesh.position.y = 0.5 + Math.sin(sh.bob) * 0.12;
+      }
+      // Pickup
+      if (d2 < 1.0) {
+        player.heal(sh.heal);
+        this.audio.playPickup();
+        sh.alive = false; sh.mesh.visible = false;
+        this._shards.splice(i, 1);
+      }
+    }
+  }
+
+  _dropShard(pos, type) {
+    const healByType = { grunt: 5, shooter: 8, heavy: 25, bomber: 12 };
+    const sh = this._shardPool.find(x => !x.alive);
+    if (!sh) return;
+    sh.alive = true;
+    sh.life = 6;
+    sh.heal = healByType[type] ?? 5;
+    sh.mesh.position.set(pos.x, 0.5, pos.z);
+    sh.mesh.visible = true;
+    sh.mesh.scale.setScalar(1);
+    this._shards.push(sh);
+  }
+
+  _spawnEnemy(type, player, hpScale = 1, spdScale = 1, fixedX = null, fixedZ = null) {
+    const def = BASE_TYPES[type];
+    const pos = (fixedX !== null)
+      ? this._randomPos.set(fixedX, def.size, fixedZ)
+      : this._findSpawnPos(player, def.size);
 
     // Reuse cached geometry; clone material dari template (hit-flash per enemy)
     const geo = this._geoCache[type];
     const mat = this._matTemplates[type].clone();
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.copy(pos);
-    mesh.castShadow = true; mesh.receiveShadow = true;
-    addOutline(mesh, null, 0x000000, 1, false);
+    mesh.castShadow = false; // musuh tanpa shadow = hemat shadow pass (blob ground sudah cukup)
+    mesh.receiveShadow = true;
 
     if (type !== 'bomber') {
       const e1 = new THREE.Mesh(this._geoCache.eye, this._eyeMat);
@@ -202,20 +333,37 @@ export class EnemyManager {
 
     mesh.userData.enemyId = enemy.id;
     mesh.userData.alive = true;
-    mesh.userData.takeDamage = (dmg) => this._damageEnemy(enemy, dmg);
+    mesh.userData.takeDamage = (dmg, kb, dir) => this._damageEnemy(enemy, dmg, kb, dir);
 
     this.enemies.push(enemy);
     this.aliveEnemies.push(enemy);
     this.meshList.push(mesh);
   }
 
+  // Spawn adil (riset 2026): min 10 m dari pemain & di luar kerucut pandang 70 derajat
   _findSpawnPos(player, size) {
-    for (let i = 0; i < 20; i++) {
+    const px = player.position.x, pz = player.position.z;
+    const yaw = player.yaw;
+    let fallback = null;
+    for (let i = 0; i < 30; i++) {
       const a = Math.random() * Math.PI * 2;
-      const r = 14 - Math.random() * 3;
+      const r = 13 + Math.random() * 3;
       const x = Math.cos(a) * r, z = Math.sin(a) * r;
-      if (Math.sqrt(x * x + z * z) > 3) return this._randomPos.set(x, size, z);
+      const dx = x - px, dz = z - pz;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < 10) continue;                 // terlalu dekat = tidak adil
+      if (Math.sqrt(x * x + z * z) < 3) continue; // hindari pillar tengah
+      if (fallback === null) fallback = { x, z };
+      // Sudut relatif terhadap arah hadap pemain (forward = -Z pada yaw)
+      const angleTo = Math.atan2(dx, dz);
+      // Normalisasi aman ke [0, 2pi) lalu ke selisih [-pi, pi] — hindari modulo negatif
+      let rel = (angleTo - yaw) % (Math.PI * 2);
+      if (rel < 0) rel += Math.PI * 2;
+      const diff = Math.abs(rel > Math.PI ? rel - Math.PI * 2 : rel);
+      // Tolak jika berada DI DEPAN pemain (kerucut pandang ~70°) -> tidak ada pop-in di mata
+      if (diff > 1.22) return this._randomPos.set(x, size, z);
     }
+    if (fallback) return this._randomPos.set(fallback.x, size, fallback.z);
     return this._randomPos.set(14, size, 0);
   }
 
@@ -254,6 +402,7 @@ export class EnemyManager {
           player.takeDamage(enemy.damage);
           enemy.attackTimer = enemy.attackCooldown;
           this.audio.playPlayerHit();
+          this.game.hud?.flashDamageFrom(enemy.mesh.position);
         }
         break;
       }
@@ -270,14 +419,23 @@ export class EnemyManager {
         break;
       }
       case 'explode': {
-        if (dist > 1.5) enemy.mesh.position.addScaledVector(dir, enemy.speed * dt);
-        const proximity = dist < enemy.explosionRadius;
+        if (dist > 1.2) enemy.mesh.position.addScaledVector(dir, enemy.speed * dt);
+        // Fix bomber dud: picu TANGKIS dekat (<1.2 m) — damage splash nyaris penuh saat detonasi
+        const proximity = dist < 1.2;
         if (proximity || enemy.hp < enemy.maxHp * 0.3) {
           this._explodeEnemy(enemy, player);
           return;
         }
-        const blink = Math.sin(dist * 5) > 0 ? 1 : 0.1;
+        // Blink makin cepat makin dekat + beep accelerando (keterbacaan ancaman)
+        const blinkRate = 4 + Math.max(0, (10 - dist)) * 0.8;
+        const blink = Math.sin(performance.now() / 1000 * blinkRate) > 0 ? 1 : 0.1;
         enemy.mesh.material.emissiveIntensity = blink;
+        if (!enemy._lastBeep) enemy._lastBeep = 0;
+        const beepInt = Math.max(0.12, 0.8 - dist * 0.06);
+        if (dist < 12 && performance.now() - enemy._lastBeep > beepInt * 1000) {
+          enemy._lastBeep = performance.now();
+          this.audio.playBomberBeep(dist);
+        }
         break;
       }
     }
@@ -316,6 +474,7 @@ export class EnemyManager {
       if (p.mesh.position.distanceTo(player.position) < 0.8) {
         player.takeDamage(p.damage);
         this.audio.playPlayerHit();
+        this.game.hud?.flashDamageFrom(p.mesh.position);
         remove = true;
       }
       if (p.lifetime <= 0 || p.mesh.position.length() > 20 || p.mesh.position.y < -2) remove = true;
@@ -328,7 +487,7 @@ export class EnemyManager {
     }
   }
 
-  _damageEnemy(enemy, damage) {
+  _damageEnemy(enemy, damage, knockback = 0, hitDir = null) {
     if (!enemy.alive) return;
     const player = this._player;
     if (!player) return;
@@ -338,30 +497,45 @@ export class EnemyManager {
     enemy.mesh.material.emissiveIntensity = 0.8;
     enemy.hitFlashTimer = 0.06;
 
-    const knockDir = this._dirToPlayer.copy(enemy.mesh.position).sub(player.position).normalize();
-    enemy.mesh.position.addScaledVector(knockDir, 0.3 * Math.min(damage / 15, 1));
+    // Knockback: arah tembakan bila ada (shotgun = dorong horde), fallback radial dari pemain
+    const kb = knockback > 0 ? knockback : 0.3 * Math.min(damage / 15, 1);
+    const dir = hitDir
+      ? this._strafe.set(hitDir.x, 0, hitDir.z)
+      : this._strafe.copy(enemy.mesh.position).sub(player.position);
+    dir.y = 0;
+    if (dir.lengthSq() > 1e-6) {
+      dir.normalize();
+      enemy.mesh.position.addScaledVector(dir, kb);
+    }
+    // Musuh berat menahan knockback (rasa bobot)
+    if (enemy.type === 'heavy') enemy.mesh.position.addScaledVector(dir, -kb * 0.6);
 
     if (enemy.hp <= 0) this._killEnemy(enemy);
   }
 
   _killEnemy(enemy) {
-    const pos = enemy.mesh.position.clone();
+    const pos = this._tempPos.copy(enemy.mesh.position);
     const color = enemy.color;
     const score = enemy.score;
-    const wasLast = this.aliveEnemies.length === 1 && this.spawnQueue.length === 0;
+    const type = enemy.type;
+    // wasLast WAJIB memperhitungkan telegraf yang belum melahirkan musuh (dulu wave-clear palsu)
+    const wasLast = this.aliveEnemies.length === 1 && this.spawnQueue.length === 0 && this._telegraphs.length === 0;
+    // Health economy: shard hanya jatuh pada kill JARAK DEKAT (<8 m) -> hadiah untuk agresi
+    const nearPlayer = this._player && this._tempPos.distanceTo(this._player.position) < 8;
     this._cleanupEnemy(enemy);
     this.particles.deathExplosion(pos, color);
     this.audio.playKillTick();
-    Events.emit('enemy-killed', { score, pos, last: wasLast });
-    if (wasLast) Events.emit('wave-clear', { pos });
+    if (nearPlayer) this._dropShard(pos, type);
+    Events.emit('enemy-killed', { score, pos: pos.clone(), last: wasLast });
+    if (wasLast) Events.emit('wave-clear', { pos: pos.clone() });
   }
 
   _explodeEnemy(enemy, player) {
-    const pos = enemy.mesh.position.clone();
+    const pos = this._tempPos.copy(enemy.mesh.position);
     const explosionRadius = enemy.explosionRadius;
     const explosionDamage = enemy.explosionDamage;
     const score = enemy.score;
-    const wasLast = this.aliveEnemies.length === 1 && this.spawnQueue.length === 0;
+    const wasLast = this.aliveEnemies.length === 1 && this.spawnQueue.length === 0 && this._telegraphs.length === 0;
     this._cleanupEnemy(enemy);
     this.particles.explosion(pos, explosionRadius);
     this.audio.playExplosion();
@@ -373,8 +547,8 @@ export class EnemyManager {
     if (d < explosionRadius) {
       player.takeDamage(explosionDamage * (1 - d / explosionRadius));
     }
-    Events.emit('enemy-killed', { score, pos, last: wasLast });
-    if (wasLast) Events.emit('wave-clear', { pos });
+    Events.emit('enemy-killed', { score, pos: pos.clone(), last: wasLast });
+    if (wasLast) Events.emit('wave-clear', { pos: pos.clone() });
   }
 
   _cleanupEnemy(enemy) {
@@ -388,6 +562,9 @@ export class EnemyManager {
     if (idx > -1) this.aliveEnemies.splice(idx, 1);
     const mIdx = this.meshList.indexOf(enemy.mesh);
     if (mIdx > -1) this.meshList.splice(mIdx, 1);
+    // Buang record musuh mati (dulu hanya dibersihkan saat reset -> array tumbuh sepanjang sesi)
+    const eIdx = this.enemies.indexOf(enemy);
+    if (eIdx > -1) this.enemies.splice(eIdx, 1);
   }
 
   collidesWith(enemy, player) {

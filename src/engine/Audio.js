@@ -25,16 +25,29 @@ export class Audio {
   // Route: semua node ke master bus (bukan destination langsung)
   _out() { return this._master ?? this.ctx.destination; }
 
-  // Short percussive noise burst
+  // Cache buffer noise unit (zero-alloc: 1 AudioBuffer per durasi, gain via node)
+  // Riset 2026: createBuffer per tembakan = GC churn di mid-combat
   _noise(duration, gain = 0.3) {
-    const sr = this.ctx.sampleRate;
-    const len = Math.max(1, Math.floor(sr * duration));
-    const buf = this.ctx.createBuffer(1, len, sr);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) {
-      data[i] = (Math.random() * 2 - 1) * gain * Math.exp(-i / (sr * duration * 0.3));
+    const key = Math.round(duration * 1000);
+    if (!this._noiseCache) this._noiseCache = new Map();
+    let buf = this._noiseCache.get(key);
+    if (!buf) {
+      const sr = this.ctx.sampleRate;
+      const len = Math.max(1, Math.floor(sr * duration));
+      buf = this.ctx.createBuffer(1, len, sr);
+      const data = buf.getChannelData(0);
+      const decay = sr * duration * 0.3;
+      for (let i = 0; i < len; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / decay);
+      }
+      this._noiseCache.set(key, buf);
     }
-    return buf;
+    // Envelope & gain diterapkan via GainNode — buffer tetap reusable
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(gain, this.ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration * 0.55);
+    g.connect(this._out());
+    return { buffer: buf, gainNode: g };
   }
 
   _tone(type, f0, f1, t0, dur, gain, dest) {
@@ -46,6 +59,8 @@ export class Audio {
     g.gain.setValueAtTime(gain, t0);
     g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
     osc.connect(g).connect(dest ?? this._out());
+    // Disconnect setelah selesai -> cegah leak node (dulu node menumpuk tak terbatas)
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch {} };
     osc.start(t0);
     osc.stop(t0 + dur);
     return osc;
@@ -57,11 +72,12 @@ export class Audio {
     const t = this.ctx.currentTime;
     this._tone('sawtooth', 800, 200, t, 0.08, 0.15);
     // Layer 2: transient punch
+    const n = this._noise(0.04, 0.5);
     const src = this.ctx.createBufferSource();
-    src.buffer = this._noise(0.04, 0.5);
+    src.buffer = n.buffer;
     const hp = this.ctx.createBiquadFilter();
     hp.type = 'highpass'; hp.frequency.value = 1200;
-    src.connect(hp).connect(this._out());
+    src.connect(hp).connect(n.gainNode);
     src.start(t);
   }
 
@@ -80,12 +96,13 @@ export class Audio {
     this._ensureResumed();
     const t = this.ctx.currentTime;
     // Crunch layer
+    const n = this._noise(0.05, 0.2);
     const src = this.ctx.createBufferSource();
-    src.buffer = this._noise(0.05, 0.2);
+    src.buffer = n.buffer;
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(2200, t);
-    src.connect(filter).connect(this._out());
+    src.connect(filter).connect(n.gainNode);
     src.start(t);
     // Armor-ping layer: metallic ringing partials
     this._tone('triangle', 2400 + Math.random() * 600, 1800, t, 0.09, 0.045);
@@ -139,6 +156,31 @@ export class Audio {
     }
   }
 
+  // Beep bomber accelerando — makin dekat makin cepat (keterbacaan ancaman, riset 2026)
+  playBomberBeep(dist) {
+    if (!this.enabled) return;
+    this._ensureResumed();
+    const t = this.ctx.currentTime;
+    const urgency = Math.max(0, Math.min(1, 1 - dist / 12));
+    this._tone('square', 1400, 1400, t, 0.05, 0.03 + urgency * 0.05);
+  }
+
+  // Tick telegraf spawn (ring membesar di lantai)
+  playSpawnTick() {
+    if (!this.enabled) return;
+    this._ensureResumed();
+    this._tone('sine', 620, 940, this.ctx.currentTime, 0.07, 0.04);
+  }
+
+  // Pickup health shard
+  playPickup() {
+    if (!this.enabled) return;
+    this._ensureResumed();
+    const t = this.ctx.currentTime;
+    this._tone('sine', 700, 1400, t, 0.12, 0.08);
+    this._tone('sine', 1400, 2100, t + 0.06, 0.1, 0.05);
+  }
+
   playDeath() {
     if (!this.enabled) return;
     this._ensureResumed();
@@ -149,13 +191,14 @@ export class Audio {
     if (!this.enabled) return;
     this._ensureResumed();
     const t = this.ctx.currentTime;
+    const n = this._noise(0.35, 0.45);
     const src = this.ctx.createBufferSource();
-    src.buffer = this._noise(0.35, 0.45);
+    src.buffer = n.buffer;
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(800, t);
     filter.frequency.exponentialRampToValueAtTime(50, t + 0.3);
-    src.connect(filter).connect(this._out());
+    src.connect(filter).connect(n.gainNode);
     src.start(t);
     // Sub thump
     this._tone('sine', 120, 30, t, 0.25, 0.3);

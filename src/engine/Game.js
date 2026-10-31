@@ -12,7 +12,7 @@ import { ShakeController } from '../systems/ShakeController.js';
 import { addOutline } from '../systems/CelOutline.js';
 import { HUD } from '../ui/HUD.js';
 
-const STATES = { MENU: 0, PLAYING: 1, GAME_OVER: 2 };
+const STATES = { MENU: 0, PLAYING: 1, GAME_OVER: 2, PAUSED: 3 };
 
 export class Game {
   constructor() {
@@ -20,16 +20,19 @@ export class Game {
     this.score = 0;
     this.kills = 0;
     this.wave = 0;
+    this._nextWave = 0;
     this.waveCooldown = 0;
     this._waveIncoming = false;
 
     // Renderer – WebGPU auto-fallback r185+
+    const dpr = window.devicePixelRatio || 1;
+    const lowEnd = (navigator.deviceMemory ?? 4) < 4;
     this.renderer = new THREE.WebGPURenderer({
-      antialias: true,
+      antialias: dpr <= 1.5, // MSAA 4x hanya pada layar non-mobile
       powerPreference: 'high-performance'
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(dpr, lowEnd ? 1.25 : 1.75));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -44,6 +47,8 @@ export class Game {
     // Camera
     this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
     this.camera.position.set(0, 1.8, 0);
+    // KRITIS: kamera wajib masuk scene agar anak-anaknya (viewmodel senjata) ikut dirender
+    this.scene.add(this.camera);
     this._euler = new THREE.Euler(0, 0, 0, 'YXZ');
     this._baseFov = this.camera.fov;
     this._fovKick = 0;
@@ -89,9 +94,12 @@ export class Game {
     Events.on('enemy-killed', (data) => {
       if (this.state !== STATES.PLAYING) return;
       this.kills++;
-      this.score += data.score * Math.max(1, (this.hud.combo || 0));
-      this.hud.addCombo();
-      // Juice 2026: hit-stop mikro pada kill
+      // Combo hanya di-naikkan HUD (dulu dobel: di sini + di listener HUD -> skor inflasi)
+      const combo = this.hud.combo;
+      const tier = this.comboTier || 0;
+      const feverMul = tier >= 3 ? 3 : tier >= 2 ? 2 : tier >= 1 ? 1.5 : 1;
+      this.score += Math.round(data.score * Math.max(1, combo + 1) * feverMul);
+      // Hit-stop mikro pada kill (juice 2026)
       this.hitStop(0.05);
     });
 
@@ -108,13 +116,33 @@ export class Game {
     this.input.onPointerLock = () => {
       this.blocker?.classList.add('hidden');
       this.hud.show();
+      // Resume dari pause
+      if (this.state === STATES.PAUSED) {
+        this.state = STATES.PLAYING;
+        this.hud.hidePause();
+        this.timer.reset();
+      }
+    };
+    this.input.onPointerLockLost = () => {
+      // ESC melepas pointer lock -> PAUSE (dulu game tetap jalan: mati telanjang)
+      if (this.state === STATES.PLAYING) {
+        this.state = STATES.PAUSED;
+        this.hud.showPause();
+      }
     };
 
     // Player death callback
     this.player.onDeath = () => this._gameOver();
 
-    // Explosion lights pool
+    // Explosion lights: PRE-ALOKASI pool (dulu new PointLight per ledakan = recompile shader -> hitch)
     this._explosionLights = [];
+    this._lightPool = [];
+    for (let i = 0; i < 4; i++) {
+      const l = new THREE.PointLight(0xff6600, 0, 10);
+      l.visible = false;
+      this.scene.add(l);
+      this._lightPool.push({ light: l, active: false, ttl: 0 });
+    }
     this._rimFwd = new THREE.Vector3();
 
     // Zero-alloc loop: pre-bound callback (riset 2026: closure per frame = alokasi sia-sia)
@@ -132,7 +160,7 @@ export class Game {
     const dir = new THREE.DirectionalLight(0xffeecc, 1.8);
     dir.position.set(15, 25, 10);
     dir.castShadow = true;
-    dir.shadow.mapSize.set(2048, 2048);
+    dir.shadow.mapSize.set(1024, 1024); // 2048->1024: -4.2M texel/frame
     dir.shadow.camera.near = 0.5;
     dir.shadow.camera.far = 60;
     dir.shadow.camera.left = -20;
@@ -217,18 +245,20 @@ export class Game {
       this.player.pitch = Math.max(-1.4, Math.min(1.4, this.player.pitch - this.input.mouse.dy * sensitivity));
     }
 
-    this.input.update();
-
-    // Recoil
+    // Recoil — KOSMETIK kamera saja (dulu ditambahkan ke pitch/yaw tiap frame -> drift permanen)
     this.player.updateRecoil(dt);
-    this.player.pitch = Math.max(-1.4, Math.min(1.4, this.player.pitch + this.player.recoilOffset.y));
-    this.player.yaw += this.player.recoilOffset.x;
 
-    // Camera rotation
-    this.camera.quaternion.setFromEuler(this._euler.set(this.player.pitch, this.player.yaw, 0, 'YXZ'));
+    // Camera rotation: aim asli + offset recoil sementara (pulih sendiri, aim tak bergeser)
+    const recoilPitch = this.player.pitch + this.player.recoilOffset.y;
+    const recoilYaw = this.player.yaw + this.player.recoilOffset.x;
+    this.camera.quaternion.setFromEuler(this._euler.set(
+      Math.max(-1.5, Math.min(1.5, recoilPitch)),
+      recoilYaw,
+      0, 'YXZ'
+    ));
 
-    // Player physics (substep)
-    const substeps = 5;
+    // Player physics (substep) — 5 -> 2: speed 7 m/s @60fps = 0.117 m/frame << 0.35 radius
+    const substeps = 2;
     const subDt = dt / substeps;
     for (let i = 0; i < substeps; i++) this.player.update(subDt, this.input);
 
@@ -257,21 +287,37 @@ export class Game {
 
     // HUD
     this.hud.update(this.score, this.kills, this.wave, this.player, this.enemyManager, dt);
+
+    // KRITIS: input di-clear di AKHIR frame — semua sistem sudah membaca justDown/mouseJustDown.
+    // (Bug lama: clear di awal -> pistol/shotgun/roket & semua ability tak pernah aktif.)
+    this.input.update();
   }
 
   _updateLights(dt) {
-    for (let i = this._explosionLights.length - 1; i >= 0; i--) {
-      const l = this._explosionLights[i];
-      l.intensity *= (1 - dt * 8);
-      if (l.intensity < 0.1) { this.scene.remove(l); this._explosionLights.splice(i, 1); }
+    for (let i = 0; i < this._lightPool.length; i++) {
+      const s = this._lightPool[i];
+      if (!s.active) continue;
+      s.ttl -= dt;
+      s.light.intensity *= (1 - dt * 8);
+      if (s.ttl <= 0 || s.light.intensity < 0.1) {
+        s.active = false;
+        s.light.visible = false;
+        s.light.intensity = 0;
+      }
     }
   }
 
+  // Reuse light dari pool — tidak ada alokasi / recompile material saat ledakan
   spawnExplosionLight(pos, color = 0xff6600, intensity = 8, radius = 10) {
-    const light = new THREE.PointLight(color, intensity, radius);
-    light.position.copy(pos);
-    this.scene.add(light);
-    this._explosionLights.push(light);
+    let slot = this._lightPool.find(s => !s.active);
+    if (!slot) slot = this._lightPool[0]; // fallback: pakai tertua
+    slot.active = true;
+    slot.ttl = 0.4;
+    slot.light.color.setHex(color);
+    slot.light.distance = radius;
+    slot.light.intensity = intensity;
+    slot.light.position.copy(pos);
+    slot.light.visible = true;
   }
 
   _checkEnemyCollisions(dt) {
@@ -280,7 +326,7 @@ export class Game {
       if (!enemy.alive) continue;
       if (this.enemyManager.collidesWith(enemy, this.player)) {
         this.player.takeDamage(enemy.collisionDamage * dt);
-        this.hud.flashDamage();
+        this.hud.flashDamageFrom(enemy.mesh.position);
       }
     }
   }
@@ -291,7 +337,7 @@ export class Game {
       this.waveCooldown -= dt;
       if (this.waveCooldown <= 0 && this._waveIncoming) {
         this._waveIncoming = false;
-        this.wave++;
+        this.wave = this._nextWave;
         this.hud.announceWave(this.wave);
         this.enemyManager.startWave(this.wave);
       }
@@ -300,8 +346,9 @@ export class Game {
     const alive = this.enemyManager.aliveEnemies.length;
     if (alive === 0 && !this.enemyManager.spawning && !this._waveIncoming) {
       this._waveIncoming = true;
+      this._nextWave = this.wave + 1;
       this.waveCooldown = 3.5;
-      this.hud.announceIncoming(this.wave + 1);
+      this.hud.announceIncoming(this._nextWave);
       this.audio.playWaveGrowl();
     }
   }
@@ -310,15 +357,46 @@ export class Game {
     if (this.state === STATES.GAME_OVER) return;
     this.state = STATES.GAME_OVER;
     document.exitPointerLock();
+    this.audio.playDeath();
     this.hud.showGameOver(this.score, this.wave, this.kills);
   }
 
   setBlocker(el) { this.blocker = el; }
 
-  start() {
+  // Restart instan — semua sistem sudah punya reset(), tak perlu location.reload()
+  restart() {
+    this.hud.hideGameOver();
+    this.hud.resetCombo();
+    this.hitStop(0);
+    this._hitStopT = 0;
+    this._fovKick = 0;
+    this.shake.intensity = 0;
+    this.score = 0;
+    this.kills = 0;
     this.state = STATES.PLAYING;
     this.timer.reset();
     this.wave = 1;
+    this._nextWave = 1;
+    this.waveCooldown = 2.0;
+    this._waveIncoming = true;
+    this.player.reset();
+    this.enemyManager.reset();
+    this.weaponSystem.reset();
+    this.abilitySystem.reset();
+    for (const l of this._explosionLights) this.scene.remove(l);
+    this._explosionLights.length = 0;
+    this.hud.announceIncoming(this.wave);
+    this.audio.playWaveGrowl();
+    document.body.requestPointerLock();
+  }
+
+  start() {
+    this.hud.hideGameOver();
+    this.hud.resetCombo();
+    this.state = STATES.PLAYING;
+    this.timer.reset();
+    this.wave = 1;
+    this._nextWave = 1;
     this.score = 0;
     this.kills = 0;
     this.waveCooldown = 2.0;

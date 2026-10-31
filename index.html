@@ -145,6 +145,11 @@
       border: 2px solid #f44; background: transparent;
     }
 
+    /* === FEVER tier === */
+    #fever-display.tier1 { color: #ff8; text-shadow: 0 0 8px rgba(255,255,136,0.6); }
+    #fever-display.tier2 { color: #ff6; text-shadow: 0 0 12px rgba(255,255,68,0.7); }
+    #fever-display.tier3 { color: #f66; text-shadow: 0 0 16px rgba(255,68,68,0.8); }
+
     /* === Radar taktis === */
     #radar {
       position: absolute; bottom: 1.5rem; left: 1.5rem;
@@ -214,6 +219,27 @@
       display: none;
     }
 
+    /* === Pause overlay === */
+    #pause-overlay {
+      position: fixed; inset: 0; z-index: 150;
+      display: none; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.78); backdrop-filter: blur(3px);
+      font-family: 'Courier New', monospace; color: #fff;
+      cursor: pointer;
+    }
+    #pause-overlay.show { display: flex; }
+    #pause-overlay .pause-title {
+      font-size: 3.5rem; letter-spacing: 0.4rem; color: #4ff;
+      text-shadow: 0 0 30px rgba(68,255,255,0.6);
+    }
+    #pause-overlay .pause-sub { font-size: 1rem; opacity: 0.6; margin-top: 0.8rem; animation: pulse 1.5s ease-in-out infinite; }
+    #pause-overlay .pause-restart {
+      margin-top: 2rem; font-size: 0.9rem; opacity: 0.75;
+      border: 1px solid rgba(255,255,255,0.3); padding: 0.6rem 1.5rem; border-radius: 4px;
+      display: inline-block;
+    }
+    #pause-overlay .pause-restart:hover { background: rgba(255,255,255,0.12); }
+
     /* === Damage overlay === */
     #damage-overlay {
       position: fixed; inset: 0; z-index: 9;
@@ -223,6 +249,20 @@
     }
     #damage-overlay.hit {
       border-color: rgba(255,0,0,0.4);
+    }
+    /* Arc arah serangan: diputar sesuai azimuth penyerang — pemain tahu harus menghadap ke mana */
+    #damage-arc {
+      position: fixed; inset: 0; z-index: 9; pointer-events: none;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0;
+    }
+    #damage-arc.show { opacity: 1; }
+    #damage-arc .arc {
+      width: 240px; height: 240px; border-radius: 50%;
+      border: 14px solid transparent;
+      border-top-color: rgba(255,40,40,0.75);
+      filter: blur(1px);
+      transition: transform 0.08s linear;
     }
   </style>
 </head>
@@ -253,6 +293,7 @@
         <div class="health-bar"><div class="health-fill" id="health-fill" style="width:100%"></div></div>
         <div id="health-text">100 HP</div>
         <div id="combo-display" style="font-size:0.7rem;opacity:0;transition:opacity 0.2s">COMBO x1</div>
+        <div id="fever-display" style="font-size:0.85rem;opacity:0;transition:opacity 0.3s;font-weight:bold;margin-top:0.15rem"></div>
       </div>
     </div>
     <div class="hud-bottom" id="weapon-hud"></div>
@@ -266,8 +307,18 @@
   <div id="crosshair"></div>
   <div id="crosshair-hit"></div>
 
-  <!-- Damage overlay -->
+  <!-- Pause overlay (ESC melepas pointer lock) -->
+  <div id="pause-overlay">
+    <div style="text-align:center">
+      <div class="pause-title">PAUSED</div>
+      <div class="pause-sub">Klik untuk lanjut bertempur</div>
+      <button class="pause-restart" id="pause-restart" style="background:transparent;color:#fff;font-family:inherit;cursor:pointer;">[ RESTART RUN ]</button>
+    </div>
+  </div>
+
+  <!-- Damage overlay + indikator arah serangan -->
   <div id="damage-overlay"></div>
+  <div id="damage-arc"></div>
 
   <!-- Wave Announcement -->
   <div id="wave-announce"></div>
@@ -282,7 +333,7 @@
         <div id="go-kills">Kills: 0</div>
       </div>
       <div class="go-new-high" id="go-new-high">★ HIGH SCORE BARU! ★</div>
-      <button class="go-restart" onclick="location.reload()">[ MAIN LAGI ]</button>
+      <button class="go-restart" id="go-restart">[ MAIN LAGI (instan) ]</button>
     </div>
   </div>
 

@@ -29,6 +29,16 @@ function init() {
       }
     });
 
+    // Pause overlay: klik untuk resume (pointer lock kembali -> onPointerLock resume state)
+    const pauseEl = document.getElementById('pause-overlay');
+    pauseEl?.addEventListener('click', (e) => {
+      if (e.target && e.target.id === 'pause-restart') return; // tombol restart ditangani sendiri
+      try { document.body.requestPointerLock(); } catch (err) { console.warn(err); }
+    });
+    document.getElementById('pause-restart')?.addEventListener('click', () => {
+      game?.restart();
+    });
+
   } catch (e) {
     console.error('Game init failed:', e);
   }

@@ -215,8 +215,10 @@ export class AbilitySystem {
     this.game.shake.add(0.35);
     this.game.fovKick(0.5);
 
+    // Iterate mundur — _killEnemy men-splice aliveEnemies saat AoE
     const enemies = this.game.enemyManager.aliveEnemies;
-    for (const e of enemies) {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const e = enemies[i];
       const dist = g.mesh.position.distanceTo(e.mesh.position);
       if (dist < 3) {
         e.mesh.userData.takeDamage?.(60 * (1 - dist / 3));

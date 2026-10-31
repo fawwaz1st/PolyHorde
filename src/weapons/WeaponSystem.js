@@ -1,10 +1,17 @@
 import * as THREE from 'three/webgpu';
 
+// PASS PERAN SENJATA (2026): tiap senjata punya niche jelas, AR tidak lagi menang semua.
+// Pistol = sidearm presisi (pemilih target jauh), AR = penyapu fodder, Shotgun = eraser jarak dekat
+// (knockback = crowd control), Rocket = tombol panik AoE.
 const WEAPONS = {
-  pistol: { name: 'PISTOL', key: '1', damage: 15, fireRate: 0.25, maxAmmo: 12, reloadTime: 1.0, recoil: 0.03, spread: 0.02, auto: false, color: 0x88aaff, projectile: false },
-  ar: { name: 'ASSAULT', key: '2', damage: 10, fireRate: 0.08, maxAmmo: 30, reloadTime: 1.8, recoil: 0.04, spread: 0.04, auto: true, color: 0x88dd88, projectile: false },
-  shotgun: { name: 'SHOTGUN', key: '3', damage: 8, fireRate: 0.6, maxAmmo: 6, reloadTime: 2.2, recoil: 0.12, spread: 0.12, pellets: 6, auto: false, color: 0xdd8844, projectile: false },
-  rocket: { name: 'ROCKET', key: '4', damage: 80, fireRate: 1.2, maxAmmo: 4, reloadTime: 2.5, recoil: 0.2, spread: 0.0, auto: false, color: 0xff4444, projectile: true, projectileSpeed: 25, projectileRadius: 0.3, explosionRadius: 4, explosionDamage: 50 }
+  // Presisi: 1-tap shooter, spread nyaris nol, DPS sengaja lebih rendah dari AR
+  pistol: { name: 'PISTOL', key: '1', damage: 30, fireRate: 0.32, maxAmmo: 9, reloadTime: 1.0, recoil: 0.05, spread: 0.006, auto: false, color: 0x88aaff, projectile: false, knockback: 0.25 },
+  // Penyapu: DPS tertinggi vs banyak target kecil, spread besar & damage per peluru rendah
+  ar: { name: 'ASSAULT', key: '2', damage: 8, fireRate: 0.08, maxAmmo: 30, reloadTime: 1.8, recoil: 0.035, spread: 0.05, auto: true, color: 0x88dd88, projectile: false, knockback: 0.1 },
+  // Eraser: burst besar + knockback kuat (dorong horde menjauh = crowd control)
+  shotgun: { name: 'SHOTGUN', key: '3', damage: 10, fireRate: 0.55, maxAmmo: 6, reloadTime: 1.6, recoil: 0.14, spread: 0.14, pellets: 6, auto: false, color: 0xdd8844, projectile: false, knockback: 1.5 },
+  // Panik: AoE besar, splash tinggi, self-damage ditekan ke 35%
+  rocket: { name: 'ROCKET', key: '4', damage: 90, fireRate: 1.2, maxAmmo: 4, reloadTime: 2.5, recoil: 0.22, spread: 0.0, auto: false, color: 0xff4444, projectile: true, projectileSpeed: 25, projectileRadius: 0.3, explosionRadius: 5, explosionDamage: 70, selfDamageMul: 0.35, knockback: 0.6 }
 };
 
 export class WeaponSystem {
@@ -23,17 +30,17 @@ export class WeaponSystem {
     this.isReloading = false;
     this.reloadTimer = 0;
 
-    // Rocket pool (pre-alloc 10)
+    // Rocket pool (pre-alloc 10): shared geo + material (dulu 10 geo + 10 material + castShadow)
     this.projectiles = [];
     this._rocketPool = [];
+    const rGeo = new THREE.SphereGeometry(0.3, 8, 8);
+    const rMat = new THREE.MeshStandardMaterial({
+      color: 0xff4444, emissive: 0xff4444, emissiveIntensity: 0.5, flatShading: true
+    });
     for (let i = 0; i < 10; i++) {
-      const g = new THREE.SphereGeometry(0.3, 8, 8);
-      const m = new THREE.MeshStandardMaterial({
-        color: 0xff4444, emissive: 0xff4444, emissiveIntensity: 0.5, flatShading: true
-      });
-      const mesh = new THREE.Mesh(g, m);
+      const mesh = new THREE.Mesh(rGeo, rMat);
       mesh.visible = false;
-      mesh.castShadow = true;
+      mesh.castShadow = false;
       scene.add(mesh);
       this._rocketPool.push({ mesh, velocity: new THREE.Vector3(), lifetime: 0, alive: false, damage: 0, explosionRadius: 0, explosionDamage: 0 });
     }
@@ -139,6 +146,8 @@ export class WeaponSystem {
         this.weaponGroup.position.y = 0;
         this.weaponGroup.rotation.z = 0;
       }
+      // KRITIS: proyektil tetap disimulasikan saat reload (dulu roket membeku di udara)
+      this._updateProjectiles(dt);
       return;
     }
 
@@ -192,13 +201,22 @@ export class WeaponSystem {
       this._dir.set(sx, sy, -1).applyQuaternion(camera.quaternion).normalize();
       this._ray.set(this.player.position, this._dir);
 
-      // Persistent meshList — zero-alloc per tembakan (riset 2026)
-      const hits = this._ray.intersectObjects(this.game.enemyManager.meshList, true);
+      // Cover nyata: peluru harus berhenti di dinding/obstacle, bukan hanya musuh.
+      // Gabungkan mesh musuh + mesh arena (array reuse — zero-alloc)
+      const arena = this.game.arena;
+      if (!this._targets) this._targets = [];
+      this._targets.length = 0;
+      const ml = this.game.enemyManager.meshList;
+      for (let i = 0; i < ml.length; i++) this._targets.push(ml[i]);
+      const am = arena.meshes;
+      for (let i = 0; i < am.length; i++) this._targets.push(am[i]);
+      const hits = this._ray.intersectObjects(this._targets, true);
       if (hits.length > 0) {
+        // Naik ke root musuh yang punya takeDamage (dulu kondisinya terbalik -> damage selalu hilang)
         let t = hits[0].object;
-        while (t.parent && t.parent.userData?.enemyId === undefined) t = t.parent;
-        if (t.userData?.takeDamage) {
-          t.userData.takeDamage(w.damage);
+        while (t && !t.userData?.takeDamage && t.parent) t = t.parent;
+        if (t?.userData?.takeDamage) {
+          t.userData.takeDamage(w.damage, w.knockback || 0, this._dir);
           this.particles.hitEffect(hits[0].point);
           this.audio.playHit();
           // Hit confirm flash via timer
@@ -260,14 +278,16 @@ export class WeaponSystem {
     this.game.shake.add(0.5 + p.explosionRadius * 0.05);
     this.game.fovKick(0.6);
     this.game.hitStop(0.06);
-    // Damage enemies
-    for (const e of this.game.enemyManager.aliveEnemies) {
+    // Damage enemies — iterate mundur: _killEnemy men-splice aliveEnemies
+    const list = this.game.enemyManager.aliveEnemies;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const e = list[i];
       const d = p.mesh.position.distanceTo(e.mesh.position);
-      if (d < p.explosionRadius) e.mesh.userData.takeDamage?.(p.explosionDamage * (1 - d / p.explosionRadius));
+      if (d < p.explosionRadius) e.mesh.userData.takeDamage?.(p.explosionDamage * (1 - d / p.explosionRadius), 0.5);
     }
-    // Self damage
+    // Self damage — 35% (dulu 50%), cukup menghukum tembakan sembarangan tanpa bunuh diri
     const pd = p.mesh.position.distanceTo(this.player.position);
-    if (pd < p.explosionRadius) this.player.takeDamage(p.explosionDamage * (1 - pd / p.explosionRadius) * 0.5);
+    if (pd < p.explosionRadius) this.player.takeDamage(p.explosionDamage * (1 - pd / p.explosionRadius) * (this.current.selfDamageMul ?? 0.35));
   }
 
   _weaponBob(dt) {

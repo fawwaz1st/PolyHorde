@@ -4,6 +4,7 @@ export class Input {
     this.mouse = { x: 0, y: 0, dx: 0, dy: 0, left: false };
     this.isLocked = false;
     this.onPointerLock = null;
+    this.onPointerLockLost = null;
 
     this._justPressed = {};
     this._keydown = e => {
@@ -30,6 +31,7 @@ export class Input {
         this.onPointerLock?.();
       } else {
         this.mouse.left = false;
+        this.onPointerLockLost?.();
       }
     };
     this._pointerlockerror = () => {

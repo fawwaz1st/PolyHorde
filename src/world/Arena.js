@@ -23,26 +23,18 @@ export class Arena {
     this._floorMarkings();
 
     // Build octree
-    for (const mesh of this.meshes) this.octree.fromGraphNode(mesh);
+    for (const mesh of this.meshes) {
+      if (mesh.userData.noCollide) continue;
+      this.octree.fromGraphNode(mesh);
+    }
   }
 
   _addSky() {
-    // Gradient sky using standard material (compatible with WebGPU r185)
-    const g = new THREE.SphereGeometry(90, 20, 20);
-    const colors = new Float32Array(g.attributes.position.count * 3);
-    const pos = g.attributes.position.array;
-    for (let i = 0; i < pos.length; i += 3) {
-      const y = pos[i + 1];
-      const h = (y / 90 + 1) * 0.5; // 0..1 bottom to top
-      // top: 0x0a0a2e (deep navy), mid: 0x1a0a1a (dark maroon), bot: 0x050510
-      const r = h > 0.6 ? 0.04 + (h - 0.6) * 2.5 * 0.04 : 0.04 + h * 0.1;
-      const gr = h > 0.6 ? 0.04 + (h - 0.6) * 2.5 * 0.02 : 0.03 + h * 0.08;
-      const b = h > 0.5 ? 0.06 + (h - 0.5) * 2 * 0.12 : 0.03 + h * 0.08;
-      colors[i] = r; colors[i + 1] = gr; colors[i + 2] = b;
-    }
-    g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    const m = new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true, depthWrite: false });
-    this.scene.add(new THREE.Mesh(g, m));
+    // Sky sphere diganti background solid + fog (sphere 90 radius 69% tertutup fog = sia-sia, 69% raster)
+    const c = new THREE.Color(0x0a0a1a);
+    this.scene.background = c;
+    // Gradient lewat fog: horizon sedikit lebih terang
+    this.scene.fog = new THREE.FogExp2(0x0a0a1a, 0.012);
   }
 
   _addGround() {
@@ -60,16 +52,22 @@ export class Arena {
   }
 
   _gridLines() {
+    // Geometri ring di-share (1 geo, skala berbeda) — hemat memori & compile shader
     const mat = new THREE.MeshBasicMaterial({ color: 0x333355, transparent: true, opacity: 0.25 });
+    const ringGeo = new THREE.RingGeometry(0.99, 1.01, 48);
     for (let r = 4; r < ARENA_RADIUS; r += 4) {
-      const m = new THREE.Mesh(new THREE.RingGeometry(r - 0.03, r + 0.03, 40), mat);
+      const m = new THREE.Mesh(ringGeo, mat);
+      m.scale.set(r, r, 1);
       m.rotation.x = -Math.PI / 2; m.position.y = 0.005;
+      m.userData.noOutline = true;
       this.scene.add(m);
     }
     const lm = new THREE.MeshBasicMaterial({ color: 0x333355, transparent: true, opacity: 0.1 });
+    const lineGeo = new THREE.PlaneGeometry(ARENA_RADIUS * 2, 0.03);
     for (let i = 0; i < 4; i++) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(ARENA_RADIUS * 2, 0.03), lm);
+      const m = new THREE.Mesh(lineGeo, lm);
       m.rotation.x = -Math.PI / 2; m.rotation.z = (i / 4) * Math.PI * 2; m.position.y = 0.005;
+      m.userData.noOutline = true;
       this.scene.add(m);
     }
   }
@@ -77,7 +75,7 @@ export class Arena {
   _walls() {
     const w = 2 * ARENA_RADIUS * Math.sin((Math.PI * 2) / SEGMENTS);
     const geo = new THREE.BoxGeometry(w, WALL_HEIGHT, 0.4);
-    const mat = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0.1, flatShading: true, side: THREE.DoubleSide });
+    const mat = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0.1, flatShading: true }); // SingleSide default
     const im = new THREE.InstancedMesh(geo, mat, SEGMENTS);
     const dummy = new THREE.Object3D();
     const col = new THREE.Color();
@@ -99,18 +97,25 @@ export class Arena {
   }
 
   _neonStrip() {
+    // 1 InstancedMesh (32 draw call -> 1) — riset 2026: batching untuk objek statis berulang
     const stripMat = new THREE.MeshBasicMaterial({
       color: 0x0044ff, transparent: true, opacity: 0.4, side: THREE.DoubleSide
     });
+    const w = 2 * ARENA_RADIUS * Math.sin(Math.PI / SEGMENTS);
+    const geo = new THREE.BoxGeometry(w, 0.1, 0.5);
+    const im = new THREE.InstancedMesh(geo, stripMat, SEGMENTS);
+    const dummy = new THREE.Object3D();
     for (let i = 0; i < SEGMENTS; i++) {
       const a = (i / SEGMENTS) * Math.PI * 2;
       const mid = a + Math.PI / SEGMENTS;
-      const w = 2 * ARENA_RADIUS * Math.sin(Math.PI / SEGMENTS);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, 0.5), stripMat);
-      m.position.set(Math.cos(mid) * ARENA_RADIUS, WALL_HEIGHT - 0.05, Math.sin(mid) * ARENA_RADIUS);
-      m.lookAt(0, WALL_HEIGHT - 0.05, 0);
-      this.scene.add(m);
+      dummy.position.set(Math.cos(mid) * ARENA_RADIUS, WALL_HEIGHT - 0.05, Math.sin(mid) * ARENA_RADIUS);
+      dummy.lookAt(0, WALL_HEIGHT - 0.05, 0);
+      dummy.updateMatrix();
+      im.setMatrixAt(i, dummy.matrix);
     }
+    im.instanceMatrix.needsUpdate = true;
+    im.userData.noOutline = true;
+    this.scene.add(im);
   }
 
   _obstacles() {
@@ -155,8 +160,9 @@ export class Arena {
   _floorMarkings() {
     const mat = new THREE.MeshBasicMaterial({ color: 0x00aaff, transparent: true, opacity: 0.15, side: THREE.DoubleSide });
     const spawnPoints = [[-10,-10],[-10,10],[10,-10],[10,10],[0,-14],[-14,0],[14,0],[0,14]];
+    const markGeo = new THREE.RingGeometry(0.3, 0.6, 16);
     for (const [x, z] of spawnPoints) {
-      const m = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.6, 16), mat);
+      const m = new THREE.Mesh(markGeo, mat);
       m.rotation.x = -Math.PI / 2; m.position.set(x, 0.02, z);
       this.scene.add(m);
     }

@@ -10,12 +10,10 @@ export class Particles {
 
     const pos = new Float32Array(MAX * 3);
     const col = new Float32Array(MAX * 3);
-    const siz = new Float32Array(MAX);
 
     this.geo = new THREE.BufferGeometry();
     this.geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     this.geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    this.geo.setAttribute('size', new THREE.BufferAttribute(siz, 1));
 
     this.mat = new THREE.PointsMaterial({
       size: 0.15, vertexColors: true, transparent: true, opacity: 1,
@@ -32,13 +30,14 @@ export class Particles {
 
     // Temp
     this._c = new THREE.Color();
+    this._v2 = new THREE.Vector3();
     this._v3 = new THREE.Vector3();
+    this._colorDirty = false;
   }
 
   _emit(pos, count, color, speed = 3, life = 0.5, spread = 1) {
     const pArr = this.geo.attributes.position.array;
     const cArr = this.geo.attributes.color.array;
-    const sArr = this.geo.attributes.size.array;
     this._c.set(color);
 
     for (let i = 0; i < count; i++) {
@@ -53,10 +52,10 @@ export class Particles {
       cArr[i3 + 1] = this._c.g + (Math.random() - 0.5) * 0.1;
       cArr[i3 + 2] = this._c.b + (Math.random() - 0.5) * 0.1;
 
-      sArr[idx] = 0.06 + Math.random() * 0.1;
       this._life[idx] = life;
       this._maxLife[idx] = life;
       this._alive[idx] = 1;
+      this._colorDirty = true;
 
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.random() * Math.PI;
@@ -85,7 +84,6 @@ export class Particles {
       const i3 = idx * 3;
       const pArr = this.geo.attributes.position.array;
       const cArr = this.geo.attributes.color.array;
-      const sArr = this.geo.attributes.size.array;
 
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.random() * Math.PI;
@@ -94,10 +92,10 @@ export class Particles {
       pArr[i3+1] = pos.y + Math.abs(Math.sin(phi) * Math.sin(theta)) * r;
       pArr[i3+2] = pos.z + Math.cos(phi) * r;
       cArr[i3] = this._c.r; cArr[i3+1] = this._c.g; cArr[i3+2] = this._c.b;
-      sArr[idx] = 0.1 + Math.random() * 0.2;
       this._life[idx] = 0.5 + Math.random() * 0.4;
       this._maxLife[idx] = 0.5 + Math.random() * 0.4;
       this._alive[idx] = 1;
+      this._colorDirty = true;
       const spd = 2 + Math.random() * radius * 2;
       this._vel[i3] = Math.sin(phi) * Math.cos(theta) * spd;
       this._vel[i3+1] = Math.abs(Math.sin(phi) * Math.sin(theta)) * spd;
@@ -127,9 +125,10 @@ export class Particles {
 
   update(dt) {
     const pArr = this.geo.attributes.position.array;
-    const sArr = this.geo.attributes.size.array;
+    const cArr = this.geo.attributes.color.array;
 
     // Compact: move alive particles to front
+    let colorMoved = false;
     let writeIdx = 0;
     for (let i = 0; i < this.count; i++) {
       if (!this._alive[i]) continue;
@@ -146,25 +145,33 @@ export class Particles {
         continue;
       }
 
-      // Copy to write position if different
+      // Copy to write position if different — WARNA ikut dipindah (bug: warna tertukar saat partikel tengah mati)
       if (writeIdx !== i) {
         pArr[w3] = pArr[i3]; pArr[w3+1] = pArr[i3+1]; pArr[w3+2] = pArr[i3+2];
+        cArr[w3] = cArr[i3]; cArr[w3+1] = cArr[i3+1]; cArr[w3+2] = cArr[i3+2];
         this._vel[w3] = this._vel[i3]; this._vel[w3+1] = this._vel[i3+1]; this._vel[w3+2] = this._vel[i3+2];
         this._life[writeIdx] = this._life[i];
         this._maxLife[writeIdx] = this._maxLife[i];
         this._alive[writeIdx] = 1;
         this._alive[i] = 0;
+        colorMoved = true;
       }
 
       const t = Math.max(0, this._life[writeIdx] / this._maxLife[writeIdx]);
-      sArr[writeIdx] = 0.06 * (1 + (1 - t) * 0.5);
       writeIdx++;
     }
 
     this.count = writeIdx;
     this.geo.setDrawRange(0, writeIdx);
+    // Upload range: hanya posisi partikel hidup (dulu 5000 float tiap frame)
+    this.geo.attributes.position.addUpdateRange(0, writeIdx * 3);
     this.geo.attributes.position.needsUpdate = true;
-    this.geo.attributes.size.needsUpdate = true;
+    // color hanya di-upload ulang saat ada emit/move — hemat bandwidth
+    if (this._colorDirty || colorMoved) {
+      this.geo.attributes.color.addUpdateRange(0, writeIdx * 3);
+      this.geo.attributes.color.needsUpdate = true;
+      this._colorDirty = false;
+    }
   }
 }
 

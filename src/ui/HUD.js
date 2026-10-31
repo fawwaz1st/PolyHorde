@@ -30,10 +30,15 @@ export class HUD {
       goKills: document.getElementById('go-kills'),
       goNewHigh: document.getElementById('go-new-high'),
       comboDisplay: document.getElementById('combo-display'),
-      radar: document.getElementById('radar')
+      radar: document.getElementById('radar'),
+      pause: document.getElementById('pause-overlay'),
+      goRestart: document.getElementById('go-restart'),
+      damageArc: document.getElementById('damage-arc'),
+      fever: document.getElementById('fever-display')
     };
 
     this.damageFlashTimer = 0;
+    this._damageArcT = 0;
     this.combo = 0;
     this.comboTimer = 0;
     this.waveAnnounceTimer = 0;
@@ -51,8 +56,14 @@ export class HUD {
     this._buildRadar();
     this._buildPopupPool();
 
-    // Listen for kills → combo
-    Events.on('enemy-killed', () => this.addCombo());
+    // Listen for kills → combo + popup skor (popup dulu dead code)
+    Events.on('enemy-killed', (data) => {
+      this.addCombo();
+      if (data?.pos) this._scorePopup(data.pos, data.score);
+    });
+
+    // Restart instan tanpa reload halaman
+    this.el.goRestart?.addEventListener('click', () => this.game.restart());
   }
 
   addCombo() {
@@ -132,13 +143,20 @@ export class HUD {
     const sin = Math.sin(-player.yaw);
     const cos = Math.cos(-player.yaw);
     let di = 0;
+    // Sort jarak: musuh terdekat WAJIB terlihat dulu (dulu bisa terselimuti 35 musuh)
     const enemies = enemyManager.aliveEnemies;
-    for (let i = 0; i < enemies.length && di < RADAR_DOTS; i++) {
+    if (!this._radarBuf) this._radarBuf = [];
+    this._radarBuf.length = 0;
+    for (let i = 0; i < enemies.length; i++) {
       const e = enemies[i];
       const dx = e.mesh.position.x - player.position.x;
       const dz = e.mesh.position.z - player.position.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist > RADAR_RANGE) continue;
+      if (dist <= RADAR_RANGE) this._radarBuf.push({ e, dx, dz, dist });
+    }
+    this._radarBuf.sort((a, b) => a.dist - b.dist);
+    for (let n = 0; n < this._radarBuf.length && di < RADAR_DOTS; n++) {
+      const { e, dx, dz } = this._radarBuf[n];
       // Rotasi ke frame pemain: forward = atas radar
       const rx = dx * cos - dz * sin;
       const rz = dx * sin + dz * cos;
@@ -210,9 +228,39 @@ export class HUD {
   show() { this.el.hud.classList.add('show'); }
   hide() { this.el.hud.classList.remove('show'); }
 
+  showPause() { this.el.pause?.classList.add('show'); }
+  hidePause() { this.el.pause?.classList.remove('show'); }
+  hideGameOver() {
+    this.el.gameOver.classList.remove('show');
+    if (this.el.goNewHigh) this.el.goNewHigh.style.display = 'none';
+  }
+  resetCombo() {
+    this.combo = 0;
+    this.comboTimer = 0;
+    this._last.combo = '';
+    if (this.el.comboDisplay) this.el.comboDisplay.style.opacity = 0;
+  }
+
   flashDamage() {
     this.damageFlashTimer = 0.15;
     this.el.damageOverlay.classList.add('hit');
+  }
+
+  // Indikator arah serangan: putar arc sesuai azimuth penyerang relatif hadap pemain
+  flashDamageFrom(attackerPos) {
+    this.flashDamage();
+    if (!this.el.damageArc || !attackerPos) return;
+    const p = this.game.player;
+    const dx = attackerPos.x - p.position.x;
+    const dz = attackerPos.z - p.position.z;
+    // Sudut absolut serangan, dikurangi hadap pemain (yaw) -> sudut layar
+    const angleWorld = Math.atan2(-dx, -dz); // 0 = utara pemain hadap
+    const angleRel = angleWorld - (-p.yaw) + Math.PI;
+    const deg = -(angleRel * 180) / Math.PI;
+    const arc = this.el.damageArc.firstElementChild;
+    if (arc) arc.style.transform = 'rotate(' + deg + 'deg)';
+    this.el.damageArc.classList.add('show');
+    this._damageArcT = 0.35;
   }
 
   // Warning: wave incoming (tension phase)
@@ -305,8 +353,9 @@ export class HUD {
       }
     }
 
-    // Ability slots
-    for (const [id, slot] of Object.entries(this.abilitySlots)) {
+    // Ability slots (entries di-cache — tanpa alokasi per frame)
+    if (!this._abilityEntries) this._abilityEntries = Object.entries(this.abilitySlots);
+    for (const [id, slot] of this._abilityEntries) {
       const state = this.abilitySystem.getAbilityState(id);
       const ready = state.ready;
       if ((slot.classList.contains('ready') ? 1 : 0) !== (ready ? 1 : 0)) {
@@ -328,6 +377,28 @@ export class HUD {
     // Damage flash
     if (this.damageFlashTimer > 0) this.damageFlashTimer -= dt;
     else this.el.damageOverlay.classList.remove('hit');
+
+    // Damage arc fade
+    if (this._damageArcT > 0) {
+      this._damageArcT -= dt;
+      if (this._damageArcT <= 0) this.el.damageArc?.classList.remove('show');
+    }
+
+    // FEVER combo tier — combo jadi sistem gameplay, bukan hanya pengali skor
+    const combo = this.combo;
+    const feverTier = combo >= 30 ? 3 : combo >= 15 ? 2 : combo >= 5 ? 1 : 0;
+    if (feverTier !== (this._last.feverTier ?? 0)) {
+      if (feverTier > 0 && this.el.fever) {
+        const labels = ['', 'FEVER I — skor x1.5', 'FEVER II — skor x2 + rate-up', 'FURY — skor x3'];
+        this.el.fever.textContent = labels[feverTier];
+        this.el.fever.className = 'fever tier' + feverTier;
+        this.el.fever.style.opacity = 1;
+      } else if (this.el.fever) {
+        this.el.fever.style.opacity = 0;
+      }
+      this._last.feverTier = feverTier;
+    }
+    this.game.comboTier = feverTier;
 
     // Low HP pulse
     if (player.hp < player.maxHp * 0.25 && player.hp > 0) {
