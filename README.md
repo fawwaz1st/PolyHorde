@@ -1,36 +1,29 @@
 # PolyHorde
 
-Browser FPS arena shooter: wave-based enemy hordes dalam arena polygonal. Three.js (WebGPURenderer, auto-fallback ke WebGL2) + Vite, ES modules, pointer lock.
+Arena FPS horde wave di browser. Low-poly, tanpa aset eksternal — semua mesh dan SFX dibuat prosedural saat runtime. Dibangun di Three.js r185 (WebGPURenderer, fallback WebGL2 otomatis) + Vite, total satu dependensi runtime.
 
-```bash
-npm install
-npm run dev      # port 5173, browser auto-open
-npm run build
-```
+Play: `npm install && npm run dev` — buka http://localhost:5173, klik untuk pointer lock.
 
-## Struktur `src/`
+## Kontrol
 
-| Folder | Isi |
-|---|---|
-| `engine/` | `Game.js` (state machine MENU/PLAYING/GAME_OVER, FOV punch, hit-stop, pacing wave), `Input.js`, `Audio.js` (SFX prosedural berlapis), `EventBus.js` |
-| `player/` | `Player.js` — capsule physics, dash, shield, recoil |
-| `world/` | `Arena.js` — radius 18, wall height 6, 32 segmen, `Octree` collision |
-| `weapons/` | `WeaponSystem.js` — 4 senjata (pistol/AR/shotgun/roket), hitscan zero-alloc |
-| `abilities/` | `AbilitySystem.js` — dash (trail kontinu), shield, grenade (pool) |
-| `enemies/` | `EnemyManager.js` — 4 tipe musuh, geometry/material cache, SpatialHash separation, `waveSize()` |
-| `systems/` | `Particles.js` (pool 5000), `ShakeController.js`, `SpatialHash.js` (queryInto zero-alloc), `CelOutline.js` |
-| `ui/` | `HUD.js` — radar taktis 10Hz, dirty-check DOM, pool score popup |
+WASD gerak, mouse lihat, klik kiri tembak. 1–4 / scroll ganti senjata, R reload, Q dash, E shield, F grenade, Space lompat, ESC pause.
 
-## Fitur juice & performa (pass 2026)
+## Yang ada di dalam
 
-Hasil riset best-practice 2026 (Three.js WebGPU/TSL, game-feel horde shooter, zero-allocation game loop):
+- 4 senjata dengan peran beda: pistol presisi (30 dmg, spread tipis), AR penyapu (100 DPS), shotgun dengan knockback besar, roket AoE dengan self-damage 35%.
+- 4 tipe musuh: grunt, shooter, heavy (charge attack), bomber (pemicu <1,2 m + beep makin cepat). HP musuh naik 12%/wave, komposisi berubah tiap wave.
+- Ekonomi health Quake-style: kill dalam radius 8 m menjatuhkan shard HP yang termagnet ke pemain — berhenti mundur, masuk ke dalam horde.
+- Spawn ditelegraf ring 0,8 detik dan tidak pernah muncul di depan mata pemain (min 10 m, di luar kerucut pandang).
+- FEVER: combo 5/15/30 kill memberi multiplier skor x1,5/x2/x3.
+- Radar taktis 10 Hz (sort jarak), indikator arah serangan, hit-stop, FOV punch, slow-mo saat wave clear.
+- SFX Web Audio prosedural berlapis (crunch + armor-ping + kill tick), compressor di master bus.
 
-- **Zero-allocation game loop** — RAF callback pre-bound, `meshList` persisten untuk hitscan (tanpa `.map()` per tembakan), geometry/musuh & pool grenade/roket/proyekil di-cache, HUD dirty-check, tanpa `setTimeout` di hot path.
-- **Layered hit audio** — crunch + armor-ping + kill confirmation tick; compressor di master bus.
-- **Tension-release pacing** — warning "WAVE N INCOMING" + growl & radar blip 3.5 detik sebelum spawn, catharsis slow-mo (hit-stop 0.45s) + chord saat wave clear.
-- **FOV punch** — kick saat tembak roket/ledakan/dash, decay balik ke base FOV.
-- **Hit-stop** — mikro-pause pada kill dan ledakan berat.
-- **Radar taktis** — blip posisi musuh relatif pemain (10 Hz, pool dot DOM).
-- **Enemy separation** — SpatialHash mencegah musuh bertumpuk.
+## Performa
 
-High score tersimpan di `localStorage` (`polyHordeHigh`).
+Loop game zero-allocation: pool objek untuk proyektil/partikel/popup, SpatialHash dengan integer key, material musuh Lambert dengan geometry di-cache, shadow map 1024. Chunk terpisah: app ~61 kB + three 782 kB (gzip 214 kB). Diuji headless Chrome: klik → tembak → dash → switch senjata, 0 error.
+
+High score disimpan di localStorage (`polyHordeHigh`).
+
+## Struktur
+
+`src/engine/` game state, input, audio, event bus · `src/player/` kapsul fisika · `src/enemies/` AI + shard + telegraph · `src/weapons/` · `src/abilities/` · `src/systems/` partikel, hash, outline · `src/ui/` HUD + radar · `index.html` menu/HUD markup.

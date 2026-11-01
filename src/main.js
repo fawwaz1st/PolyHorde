@@ -1,4 +1,3 @@
-import './style.css';
 import { Game } from './engine/Game.js';
 
 let game;
@@ -9,16 +8,27 @@ function init() {
     const blocker = document.getElementById('blocker');
     game.setBlocker(blocker);
 
+    // High score dari run terakhir — tampil di menu (localStorage)
+    try {
+      const high = parseInt(localStorage.getItem('polyHordeHigh') || '0');
+      if (high > 0) {
+        const el = document.getElementById('menu-high');
+        if (el) { el.textContent = 'BEST: ' + high.toLocaleString('id-ID'); el.style.display = 'block'; }
+      }
+    } catch {}
+
     // Single click handler on blocker — use pointer lock on document body
     blocker.addEventListener('click', () => {
       try {
         document.body.requestPointerLock();
       } catch (e) {
         console.warn('Pointer lock request failed:', e);
+        showLockWarn();
       }
     });
 
     // Pointer lock change — start game
+    document.addEventListener('pointerlockerror', showLockWarn);
     document.addEventListener('pointerlockchange', () => {
       try {
         if (document.pointerLockElement && game && game.state === 0) {
@@ -42,6 +52,11 @@ function init() {
   } catch (e) {
     console.error('Game init failed:', e);
   }
+}
+
+function showLockWarn() {
+  const el = document.getElementById('lock-warn');
+  if (el) el.style.display = 'block';
 }
 
 // Wait for DOM

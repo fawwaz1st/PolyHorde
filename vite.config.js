@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: '.',
-  publicDir: 'public',
+  publicDir: false, // tidak ada aset statis — semuanya prosedural
   server: {
     port: 5173,
     open: true

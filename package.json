@@ -1,6 +1,7 @@
 {
   "name": "poly-horde",
   "version": "0.1.0",
+  "description": "Browser arena FPS horde shooter — prosedural, zero assets, Three.js WebGPU + Vite",
   "private": true,
   "type": "module",
   "scripts": {
