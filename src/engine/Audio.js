@@ -222,3 +222,173 @@ export class Audio {
     this._tone('sine', 200, 60, this.ctx.currentTime, 0.2, 0.15);
   }
 }
+
+// ============================================================================
+// Procedural adaptive music (riset 2026): zero-asset, Web Audio API synth.
+// Dua layer: calm (pad + arpeggio) dan combat (bass + drum), crossfade by intensity.
+// ============================================================================
+export class Music {
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.enabled = !!ctx;
+    if (!this.enabled) return;
+
+    this.master = ctx.createGain();
+    this.master.gain.value = 0.55;
+    this.master.connect(ctx.destination);
+
+    this.calmGain = ctx.createGain();
+    this.calmGain.gain.value = 1;
+    this.combatGain = ctx.createGain();
+    this.combatGain.gain.value = 0;
+    this.calmGain.connect(this.master);
+    this.combatGain.connect(this.master);
+
+    this.calmFilter = ctx.createBiquadFilter();
+    this.calmFilter.type = 'lowpass';
+    this.calmFilter.frequency.value = 1400;
+    this.calmFilter.connect(this.calmGain);
+
+    this.scale = [220, 261.63, 293.66, 329.63, 392.00, 440, 523.25, 587.33, 659.25, 783.99];
+
+    this.intensity = 0;
+    this._targetIntensity = 0;
+    this._nextNoteTime = 0;
+    this._bar = 0;
+    this._scheduler = null;
+    this._running = false;
+    this._noiseCache = new Map();
+  }
+
+  setIntensity(v) {
+    this._targetIntensity = Math.max(0, Math.min(1, v));
+  }
+
+  start() {
+    if (!this.enabled || this._running) return;
+    this._running = true;
+    const ctx = this.ctx;
+    this._nextNoteTime = ctx.currentTime + 0.1;
+    this._scheduler = setInterval(() => this._schedule(), 100);
+  }
+
+  stop() {
+    this._running = false;
+    if (this._scheduler) { clearInterval(this._scheduler); this._scheduler = null; }
+  }
+
+  _updateGains() {
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    this.intensity += (this._targetIntensity - this.intensity) * 0.08;
+    const i = this.intensity;
+    this.calmGain.gain.setTargetAtTime(1 - i * 0.6, t, 0.25);
+    this.combatGain.gain.setTargetAtTime(i, t, 0.25);
+    this.calmFilter.frequency.setTargetAtTime(900 + (1 - i) * 900, t, 0.3);
+  }
+
+  _schedule() {
+    if (!this._running) return;
+    this._updateGains();
+    const ctx = this.ctx;
+    const lookahead = 0.25;
+    while (this._nextNoteTime < ctx.currentTime + lookahead) {
+      this._playBar(this._nextNoteTime);
+      this._nextNoteTime += 0.5;
+      this._bar++;
+    }
+  }
+
+  _playBar(t0) {
+    const i = this.intensity;
+    const scale = this.scale;
+    const root = scale[0];
+
+    // Calm pad: chord lambat
+    for (const off of [0, 4, 7]) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = root * Math.pow(2, off / 12);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.06, t0 + 0.08);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.48);
+      osc.connect(g).connect(this.calmFilter);
+      osc.start(t0); osc.stop(t0 + 0.5);
+      osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch {} };
+    }
+
+    // Calm arpeggio
+    if (Math.random() < 0.7 - i * 0.5) {
+      const note = scale[Math.floor(Math.random() * 5)];
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = note;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.07, t0 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+      osc.connect(g).connect(this.calmGain);
+      osc.start(t0); osc.stop(t0 + 0.25);
+      osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch {} };
+    }
+
+    // Combat bass
+    if (i > 0.15) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.value = root / 2;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.12 * i, t0 + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.45);
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = 400 + i * 600;
+      osc.connect(lp).connect(g).connect(this.combatGain);
+      osc.start(t0); osc.stop(t0 + 0.5);
+      osc.onended = () => { try { osc.disconnect(); g.disconnect(); lp.disconnect(); } catch {} };
+    }
+
+    // Combat drum
+    if (i > 0.25) {
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(110, t0);
+      osc.frequency.exponentialRampToValueAtTime(40, t0 + 0.12);
+      g.gain.setValueAtTime(0.22 * i, t0);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+      osc.connect(g).connect(this.combatGain);
+      osc.start(t0); osc.stop(t0 + 0.18);
+      osc.onended = () => { try { osc.disconnect(); g.disconnect(); } catch {} };
+
+      if (i > 0.5) {
+        const n = this._noiseBuffer(0.05);
+        const src = this.ctx.createBufferSource();
+        src.buffer = n;
+        const g2 = this.ctx.createGain();
+        const hp = this.ctx.createBiquadFilter();
+        hp.type = 'highpass'; hp.frequency.value = 6000;
+        g2.gain.setValueAtTime(0.05 * i, t0 + 0.25);
+        g2.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+        src.connect(hp).connect(g2).connect(this.combatGain);
+        src.start(t0 + 0.25); src.stop(t0 + 0.3);
+        src.onended = () => { try { src.disconnect(); g2.disconnect(); hp.disconnect(); } catch {} };
+      }
+    }
+  }
+
+  _noiseBuffer(dur) {
+    const key = Math.round(dur * 1000);
+    let buf = this._noiseCache.get(key);
+    if (!buf) {
+      const sr = this.ctx.sampleRate;
+      const len = Math.max(1, Math.floor(sr * dur));
+      buf = this.ctx.createBuffer(1, len, sr);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      this._noiseCache.set(key, buf);
+    }
+    return buf;
+  }
+}

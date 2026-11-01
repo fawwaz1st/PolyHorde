@@ -374,6 +374,15 @@ export class EnemyManager {
 
     if (dist > 0.1) enemy.mesh.lookAt(player.position.x, enemy.mesh.position.y, player.position.z);
 
+    // Procedural animation: idle sway saat speed rendah, attack lunge saat menyerang
+    const speedNow = enemy.mesh.position.distanceTo(enemy._lastPos || enemy.mesh.position);
+    enemy._lastPos = enemy.mesh.position.clone();
+    const t = performance.now() / 1000;
+    const sway = Math.sin(t * 3.2 + enemy.id * 1.7) * 0.025 * Math.max(0, 1 - speedNow * 8);
+    enemy.mesh.scale.y = 1 + sway;
+    enemy.mesh.scale.x = 1 - sway * 0.5;
+    enemy.mesh.scale.z = 1 - sway * 0.5;
+
     // Flee at low HP
     if (enemy.hp / enemy.maxHp < 0.2 && enemy.type !== 'bomber') {
       this._strafe.copy(dir).negate();
@@ -407,11 +416,18 @@ export class EnemyManager {
         break;
       }
       case 'ranged': {
-        if (dist > 8) enemy.mesh.position.addScaledVector(dir, enemy.speed * dt);
-        else if (dist < 4) enemy.mesh.position.addScaledVector(dir, -enemy.speed * 0.5 * dt);
-        this._strafe.set(-dir.z, 0, dir.x);
-        // Strafe unik per enemy (id-specific phase)
-        enemy.mesh.position.addScaledVector(this._strafe, Math.sin(enemy.id * 1.7 + performance.now() / 600) * 0.6 * dt);
+        // Flanking (riset 2026): swing wide ke flank, bukan langsung ke player
+        const flankSign = (enemy.id % 2 === 0) ? 1 : -1;
+        const flankVec = this._strafe.set(-dir.z * flankSign, 0, dir.x * flankSign);
+        // Jaga jarak optimal 8-10 m, lalu flank
+        if (dist > 10) enemy.mesh.position.addScaledVector(dir, enemy.speed * dt);
+        else if (dist < 7) enemy.mesh.position.addScaledVector(dir, -enemy.speed * 0.6 * dt);
+        else enemy.mesh.position.addScaledVector(flankVec, enemy.speed * 0.5 * dt);
+        // Cover seek: jika pemain menembak (velocity player tinggi), shooter berlindung di balik obstacle
+        if (player.velocity && player.velocity.length() > 4) {
+          const cover = this._nearestCover(enemy.mesh.position, 4);
+          if (cover) enemy.mesh.position.addScaledVector(cover, enemy.speed * 0.3 * dt);
+        }
         if (enemy.attackTimer <= 0) {
           this._enemyShoot(enemy, player);
           enemy.attackTimer = enemy.attackCooldown;
@@ -439,12 +455,46 @@ export class EnemyManager {
         break;
       }
     }
+    this._avoidObstacles(enemy);
     this._clampBounds(enemy);
   }
 
   _clampBounds(enemy) {
     const h = Math.sqrt(enemy.mesh.position.x ** 2 + enemy.mesh.position.z ** 2);
     if (h > 17) { const s = 16 / h; enemy.mesh.position.x *= s; enemy.mesh.position.z *= s; }
+  }
+
+  // Cover seek: cari obstacle terdekat untuk berlindung (riset 2026: utility scoring)
+  _nearestCover(pos, range) {
+    const arena = this.game?.arena;
+    if (!arena || !arena.meshes) return null;
+    let best = null; let bestD = range;
+    for (const m of arena.meshes) {
+      if (!m.position || m.isInstancedMesh) continue;
+      const dx = m.position.x - pos.x, dz = m.position.z - pos.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d < bestD && d > 0.5) { bestD = d; best = { x: -dx / d, z: -dz / d }; }
+    }
+    return best;
+  }
+
+  // Obstacle avoidance sederhana: jauhi obstacle yang terlalu dekat (dipanggil di melee)
+  _avoidObstacles(enemy) {
+    const arena = this.game?.arena;
+    if (!arena || !arena.meshes) return;
+    const p = enemy.mesh.position;
+    for (const m of arena.meshes) {
+      if (!m.position || m.isInstancedMesh) continue;
+      const dx = p.x - m.position.x, dz = p.z - m.position.z;
+      const d2 = dx * dx + dz * dz;
+      const minD = (enemy.size || 0.5) + 0.8;
+      if (d2 < minD * minD && d2 > 1e-4) {
+        const d = Math.sqrt(d2);
+        const push = (minD - d) * 0.4;
+        p.x += (dx / d) * push;
+        p.z += (dz / d) * push;
+      }
+    }
   }
 
   _enemyShoot(enemy, player) {

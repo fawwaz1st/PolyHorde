@@ -24,6 +24,14 @@ Loop game zero-allocation: pool objek untuk proyektil/partikel/popup, SpatialHas
 
 High score disimpan di localStorage (`polyHordeHigh`).
 
+## Yang baru (overhaul 2026)
+
+- **Bloom post-processing TSL** (RenderPipeline + BloomNode) — emisi neon/tracer/proyektil menyala, threshold 0.72 agar material tetap crisp.
+- **Musik prosedural adaptif** (Web Audio API, zero aset) — layer calm (pad + arpeggio) crossfade ke layer combat (bass + drum) berdasarkan kepadatan musuh & tekanan HP.
+- **Story mode JIT narrative** — briefing 1-2 kalimat antar wave + objective aktif di HUD atas, tanpa dump teks di awal.
+- **AI cover & flanking** — shooter swing wide ke flank, cover seek saat pemain menembak, obstacle avoidance; musuh beranimasi prosedural (idle sway, scale lunge).
+- **Precision**: headshot/weak-point multiplier, knockback per senjata (shotgun 1.5 m, rocket 0.6 m).
+
 ## Struktur
 
 `src/engine/` game state, input, audio, event bus · `src/player/` kapsul fisika · `src/enemies/` AI + shard + telegraph · `src/weapons/` · `src/abilities/` · `src/systems/` partikel, hash, outline · `src/ui/` HUD + radar · `index.html` menu/HUD markup.

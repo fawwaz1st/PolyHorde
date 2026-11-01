@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
+import { pass } from 'three/tsl';
+import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
 import { Input } from './Input.js';
-import { Audio } from './Audio.js';
+import { Audio, Music } from './Audio.js';
 import { Events } from './EventBus.js';
 import { Player } from '../player/Player.js';
 import { Arena } from '../world/Arena.js';
@@ -11,6 +13,7 @@ import { Particles } from '../systems/Particles.js';
 import { ShakeController } from '../systems/ShakeController.js';
 import { addOutline } from '../systems/CelOutline.js';
 import { HUD } from '../ui/HUD.js';
+import { Story } from './Story.js';
 
 const STATES = { MENU: 0, PLAYING: 1, GAME_OVER: 2, PAUSED: 3 };
 
@@ -60,6 +63,7 @@ export class Game {
     // Systems
     this.input = new Input(this.renderer.domElement);
     this.audio = new Audio();
+    this.music = new Music(this.audio.ctx);
     this.particles = new Particles(this.scene);
     this.shake = new ShakeController();
 
@@ -80,6 +84,9 @@ export class Game {
 
     // HUD
     this.hud = new HUD(this.weaponSystem, this.abilitySystem, this);
+
+    // Story mode: JIT narrative + objective HUD
+    this.story = new Story(this);
 
     // Lighting
     this._setupLighting();
@@ -148,9 +155,25 @@ export class Game {
     // Zero-alloc loop: pre-bound callback (riset 2026: closure per frame = alokasi sia-sia)
     this._boundAnimate = this._animate.bind(this);
 
-    this.renderer.init().then(() => {
-      requestAnimationFrame(this._boundAnimate);
-    });
+    this.renderer.init()
+      .then(() => {
+        // TSL post-processing (riset 2026): scenePass + bloom selektif — emisi neon/tracer/proyektil menyala
+        try {
+          const scenePass = pass(this.scene, this.camera);
+          const bloomPass = bloom(scenePass, 0.55, 0.4, 0.72); // lembut: hanya emisi terang
+          this.renderer.renderPipeline = new THREE.RenderPipeline(this.renderer, bloomPass);
+        } catch (e) {
+          console.warn('Bloom pipeline tidak tersedia, lanjut tanpa post-processing:', e);
+        }
+        requestAnimationFrame(this._boundAnimate);
+      })
+      .catch((e) => {
+        console.error('Renderer init failed:', e);
+        const el = document.createElement('div');
+        el.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#100;color:#f44;font-family:monospace;font-size:1.2rem;z-index:9999;';
+        el.textContent = 'Renderer gagal init: ' + (e?.message || e);
+        document.body.appendChild(el);
+      });
   }
 
   _setupLighting() {
@@ -285,6 +308,10 @@ export class Game {
     // Explosion lights
     this._updateLights(dt);
 
+    // Musik adaptif: intensity naik dengan jumlah musuh hidup + tekanan HP
+    const alive = this.enemyManager.aliveEnemies.length;
+    const pressure = Math.min(1, alive / 18 + (1 - this.player.hp / this.player.maxHp) * 0.4);
+    this.music.setIntensity(pressure);
     // HUD
     this.hud.update(this.score, this.kills, this.wave, this.player, this.enemyManager, dt);
 
@@ -358,6 +385,7 @@ export class Game {
     this.state = STATES.GAME_OVER;
     document.exitPointerLock();
     this.audio.playDeath();
+    this.music.stop();
     this.hud.showGameOver(this.score, this.wave, this.kills);
   }
 
@@ -387,6 +415,9 @@ export class Game {
     this._explosionLights.length = 0;
     this.hud.announceIncoming(this.wave);
     this.audio.playWaveGrowl();
+    this.music.start();
+    this.story.reset();
+    this.story.playIntro();
     document.body.requestPointerLock();
   }
 
@@ -407,5 +438,8 @@ export class Game {
     this.abilitySystem.reset();
     this.hud.announceIncoming(this.wave);
     this.audio.playWaveGrowl();
+    this.music.start();
+    this.story.reset();
+    this.story.playIntro();
   }
 }
