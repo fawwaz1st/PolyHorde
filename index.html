@@ -128,9 +128,10 @@
     }
     #crosshair::before, #crosshair::after {
       content: ''; position: absolute; background: rgba(255,255,255,0.8);
+      transition: all 0.06s linear;
     }
-    #crosshair::before { width: 2px; height: 18px; top: 3px; left: 11px; }
-    #crosshair::after { width: 18px; height: 2px; top: 11px; left: 3px; }
+    #crosshair::before { width: 2px; height: 10px; top: 2px; left: calc(50% - 1px); }
+    #crosshair::after { width: 10px; height: 2px; top: calc(50% - 1px); left: 2px; }
     #crosshair.hit { opacity: 0; }
     #crosshair-hit {
       position: fixed; top: 50%; left: 50%;

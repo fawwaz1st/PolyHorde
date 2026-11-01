@@ -29,13 +29,17 @@ export class Game {
 
     // Renderer – WebGPU auto-fallback r185+
     const dpr = window.devicePixelRatio || 1;
-    const lowEnd = (navigator.deviceMemory ?? 4) < 4;
+    const dm = navigator.deviceMemory ?? (navigator.hardwareConcurrency && navigator.hardwareConcurrency < 6 ? 3 : 4);
+    const lowEnd = dm < 4;
+    const isMobileUA = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
     this.renderer = new THREE.WebGPURenderer({
-      antialias: dpr <= 1.5, // MSAA 4x hanya pada layar non-mobile
+      antialias: dpr <= 1.5 && !isMobileUA,
       powerPreference: 'high-performance'
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(dpr, lowEnd ? 1.25 : 1.75));
+    // Bloom aktif → scene RT HalfFloat pada drawing-buffer size (dpr ikut) = ~51MB @dpr 1.75; cap dpr 1.5 saat bloom
+    const bloomDprCap = this.renderPipeline ? 1.5 : 1.75;
+    this.renderer.setPixelRatio(Math.min(dpr, isMobileUA ? 1.25 : (lowEnd ? 1.25 : bloomDprCap)));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -96,6 +100,10 @@ export class Game {
 
     // Resize
     window.addEventListener('resize', () => this._resize());
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.music?.stop();
+      else if (this.state === 1) this.music?.start();
+    });
 
     // Events
     Events.on('enemy-killed', (data) => {
@@ -160,11 +168,18 @@ export class Game {
         // TSL post-processing (riset 2026): scenePass + bloom selektif — emisi neon/tracer/proyektil menyala
         try {
           const scenePass = pass(this.scene, this.camera);
-          const bloomPass = bloom(scenePass, 0.55, 0.4, 0.72); // lembut: hanya emisi terang
-          this.renderer.renderPipeline = new THREE.RenderPipeline(this.renderer, bloomPass);
+          // sceneColor = scene+bloom (bukan hanya tekstur bloom — dulu layar hitam)
+          const sceneColor = scenePass.getTextureNode('output');
+          const bloomPass = bloom(scenePass, 0.55, 0.4, 0.72);
+          const outputNode = sceneColor.add(bloomPass);
+          this.renderPipeline = new THREE.RenderPipeline(this.renderer, outputNode);
+          if (typeof this.renderPipeline.setResolutionScale === 'function') this.renderPipeline.setResolutionScale(0.35);
+          else if (bloomPass && typeof bloomPass.setResolutionScale === 'function') bloomPass.setResolutionScale(0.35);
         } catch (e) {
           console.warn('Bloom pipeline tidak tersedia, lanjut tanpa post-processing:', e);
         }
+        // Warm-up: satu kali render pipeline di init (compile shader bloom di luar RAF)
+        if (this.renderPipeline) { try { this.renderPipeline.render(); } catch (e) { console.warn('pipeline warmup fail:', e); } }
         requestAnimationFrame(this._boundAnimate);
       })
       .catch((e) => {
@@ -257,7 +272,10 @@ export class Game {
       this.camera.updateProjectionMatrix();
     }
 
-    this.renderer.render(this.scene, this.camera);
+    // Bloom pipeline render; skip saat PAUSED (baterai) — kecuali first frame
+    if (this.state === 3) return; // PAUSED: jangan render tiap frame
+    if (this.renderPipeline) this.renderPipeline.render();
+    else this.renderer.render(this.scene, this.camera);
   }
 
   _update(dt) {
@@ -439,7 +457,8 @@ export class Game {
     this.hud.announceIncoming(this.wave);
     this.audio.playWaveGrowl();
     this.music.start();
-    this.story.reset();
-    this.story.playIntro();
+    // Intro story hanya sekali per sesi — retry instan (UX audit: friksi retry)
+    if (!this._introShown) { this._introShown = true; this.story.reset(); this.story.playIntro(); }
+    else { this.story.reset(); this.story.setObjective('Bertahan. Combo 5 = FEVER x1,5.'); }
   }
 }

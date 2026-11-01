@@ -266,6 +266,7 @@ export class Music {
 
   start() {
     if (!this.enabled || this._running) return;
+    if (this.ctx.state === 'suspended') this.ctx.resume();
     this._running = true;
     const ctx = this.ctx;
     this._nextNoteTime = ctx.currentTime + 0.1;

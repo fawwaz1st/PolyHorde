@@ -91,7 +91,9 @@ export class HUD {
   }
 
   _scorePopup(pos, score) {
-    const val = score * Math.max(1, this.combo);
+    const tier = this.game.comboTier || 0;
+    const feverMul = tier >= 3 ? 3 : tier >= 2 ? 2 : tier >= 1 ? 1.5 : 1;
+    const val = Math.round(score * Math.max(1, this.combo) * feverMul);
     const p = this._popups[this._popupIdx];
     this._popupIdx = (this._popupIdx + 1) % POPUP_POOL;
     const v = this._toScreen(pos);
@@ -164,9 +166,33 @@ export class HUD {
       const py = 50 + (rz / RADAR_RANGE) * 46;
       const dot = this._radarDots[di++];
       dot.style.opacity = '0.9';
-      dot.style.left = px + '%';
-      dot.style.top = py + '%';
+      dot.style.left = '50%';
+      dot.style.top = '50%';
+      dot.style.transform = 'translate3d(' + (px - 50) + '%, ' + (py - 50) + '%, 0) translate(-50%, -50%)';
+      dot.style.willChange = 'transform';
       dot.style.background = e.type === 'bomber' ? '#4f4' : e.type === 'heavy' ? '#a6f' : '#f66';
+    }
+    // Telegraf aktif -> blip oranye berkedip (menghilangkan blind spot tension phase)
+    const telegraphs = this.game?.enemyManager?._telegraphs;
+    if (telegraphs && telegraphs.length > 0) {
+      const blink = Math.sin(performance.now() / 180) > 0 ? 0.95 : 0.35;
+      for (let t = 0; t < telegraphs.length && di < RADAR_DOTS; t++) {
+        const tg = telegraphs[t];
+        const dx = tg.x - player.position.x;
+        const dz = tg.z - player.position.z;
+        const sin = Math.sin(-player.yaw);
+        const cos = Math.cos(-player.yaw);
+        const rx = dx * cos - dz * sin;
+        const rz = dx * sin + dz * cos;
+        const px = 50 + (rx / RADAR_RANGE) * 46;
+        const py = 50 + (rz / RADAR_RANGE) * 46;
+        const dot = this._radarDots[di++];
+        dot.style.opacity = String(blink);
+        dot.style.left = px + '%';
+        dot.style.top = py + '%';
+        dot.style.background = '#fa4';
+        dot.style.borderRadius = '50%';
+      }
     }
     for (; di < RADAR_DOTS; di++) this._radarDots[di].style.opacity = '0';
   }
@@ -305,25 +331,32 @@ export class HUD {
     if (s !== this._last.score) { this.el.scoreDisplay.textContent = 'SCORE: ' + s; this._last.score = s; }
     const w = 'WAVE ' + wave;
     if (w !== this._last.wave) { this.el.waveDisplay.textContent = w; this._last.wave = w; }
-    const ec = String(enemyManager.aliveEnemies.length);
+    const total = enemyManager.aliveEnemies.length + enemyManager.spawnQueue.length + (enemyManager._telegraphs?.length || 0);
+    const ec = String(total);
     if (ec !== this._last.enemy) { this.el.enemyCount.textContent = 'Musuh: ' + ec; this._last.enemy = ec; }
     const hpPct = Math.max(0, (player.hp / player.maxHp) * 100);
     const hpKey = Math.ceil(hpPct) + ':' + Math.ceil(player.hp);
     if (hpKey !== this._last.hp) {
       this.el.healthFill.style.width = hpPct + '%';
       this.el.healthText.textContent = Math.ceil(player.hp) + ' HP';
+      const col = hpPct > 50 ? '#4f4' : hpPct > 25 ? '#ff6' : '#f44';
+      this.el.healthFill.style.background = col;
       this._last.hp = hpKey;
     }
 
-    // Combo
+    // Combo + FEVER jadi satu chip (dulu dua teks terpisah untuk satu sistem)
     if (this.combo > 0) {
       this.comboTimer -= dt;
       if (this.comboTimer <= 0) { this.combo = 0; this.el.comboDisplay.style.opacity = 0; this._last.combo = ''; }
       else {
-        const c = 'COMBO x' + this.combo;
+        const tier = this.game.comboTier || 0;
+        const mul = tier >= 3 ? 'x3' : tier >= 2 ? 'x2' : tier >= 1 ? 'x1.5' : 'x1';
+        const c = 'COMBO ' + this.combo + '  ' + mul;
         if (c !== this._last.combo) { this.el.comboDisplay.textContent = c; this._last.combo = c; }
         this.el.comboDisplay.style.opacity = 1;
       }
+    } else if (this.el.comboDisplay.style.opacity !== '0') {
+      this.el.comboDisplay.style.opacity = 0;
     }
 
     // Crosshair spread feedback
@@ -389,10 +422,9 @@ export class HUD {
     const feverTier = combo >= 30 ? 3 : combo >= 15 ? 2 : combo >= 5 ? 1 : 0;
     if (feverTier !== (this._last.feverTier ?? 0)) {
       if (feverTier > 0 && this.el.fever) {
-        const labels = ['', 'FEVER I — skor x1.5', 'FEVER II — skor x2 + rate-up', 'FURY — skor x3'];
-        this.el.fever.textContent = labels[feverTier];
+        this.el.fever.textContent = '';
         this.el.fever.className = 'fever tier' + feverTier;
-        this.el.fever.style.opacity = 1;
+        this.el.fever.style.opacity = 0; // chip combo sudah menampung info fever
       } else if (this.el.fever) {
         this.el.fever.style.opacity = 0;
       }

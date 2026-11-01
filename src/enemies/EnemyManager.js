@@ -321,7 +321,7 @@ export class EnemyManager {
     const enemy = {
       id: this.enemyIdCounter,
       type, mesh, ...def,
-      pos: pos.clone(), state: 'chase', idleTimer: 0,
+      state: 'chase', idleTimer: 0,
       hp: def.hp * hpScale, maxHp: def.hp * hpScale,
       speed: def.speed * spdScale,
       alive: true, staggerTimer: 0, attackTimer: 0,
@@ -375,8 +375,9 @@ export class EnemyManager {
     if (dist > 0.1) enemy.mesh.lookAt(player.position.x, enemy.mesh.position.y, player.position.z);
 
     // Procedural animation: idle sway saat speed rendah, attack lunge saat menyerang
-    const speedNow = enemy.mesh.position.distanceTo(enemy._lastPos || enemy.mesh.position);
-    enemy._lastPos = enemy.mesh.position.clone();
+    if (!enemy._lastPos) enemy._lastPos = new THREE.Vector3();
+    const speedNow = enemy.mesh.position.distanceTo(enemy._lastPos);
+    enemy._lastPos.copy(enemy.mesh.position);
     const t = performance.now() / 1000;
     const sway = Math.sin(t * 3.2 + enemy.id * 1.7) * 0.025 * Math.max(0, 1 - speedNow * 8);
     enemy.mesh.scale.y = 1 + sway;
@@ -473,7 +474,7 @@ export class EnemyManager {
       if (!m.position || m.isInstancedMesh) continue;
       const dx = m.position.x - pos.x, dz = m.position.z - pos.z;
       const d = Math.sqrt(dx * dx + dz * dz);
-      if (d < bestD && d > 0.5) { bestD = d; best = { x: -dx / d, z: -dz / d }; }
+      if (d < bestD && d > 0.5) { bestD = d; if (!best) best = new THREE.Vector3(); best.set(-dx / d, 0, -dz / d); }
     }
     return best;
   }
@@ -608,13 +609,13 @@ export class EnemyManager {
     this.scene.remove(enemy.mesh);
     // Geometry di-cache & di-reuse — JANGAN dispose; material clone saja yang dibuang
     enemy.mesh.material?.dispose();
-    const idx = this.aliveEnemies.indexOf(enemy);
-    if (idx > -1) this.aliveEnemies.splice(idx, 1);
-    const mIdx = this.meshList.indexOf(enemy.mesh);
-    if (mIdx > -1) this.meshList.splice(mIdx, 1);
-    // Buang record musuh mati (dulu hanya dibersihkan saat reset -> array tumbuh sepanjang sesi)
-    const eIdx = this.enemies.indexOf(enemy);
-    if (eIdx > -1) this.enemies.splice(eIdx, 1);
+    // Swap-pop O(1) — dulu splice O(n); n≤35 tapi AoE massal terasa
+    let idx = this.aliveEnemies.indexOf(enemy);
+    if (idx > -1) { const last = this.aliveEnemies.length - 1; if (idx !== last) this.aliveEnemies[idx] = this.aliveEnemies[last]; this.aliveEnemies.pop(); }
+    idx = this.meshList.indexOf(enemy.mesh);
+    if (idx > -1) { const last = this.meshList.length - 1; if (idx !== last) this.meshList[idx] = this.meshList[last]; this.meshList.pop(); }
+    idx = this.enemies.indexOf(enemy);
+    if (idx > -1) { const last = this.enemies.length - 1; if (idx !== last) this.enemies[idx] = this.enemies[last]; this.enemies.pop(); }
   }
 
   collidesWith(enemy, player) {

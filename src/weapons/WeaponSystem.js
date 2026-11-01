@@ -163,11 +163,14 @@ export class WeaponSystem {
     }
 
     const w = this.current;
+    // FEVER rate-up nyata (dulu label janji kosong): tier>=2 → fireRate -6% per tier
+    const tier = this.game.comboTier || 0;
+    const rateMul = tier >= 2 ? 1 - 0.06 * tier : 1;
     w.cooldown -= dt;
     const fire = w.auto ? input.mouse.left : input.mouseJustDown();
     if (fire && w.cooldown <= 0 && w.ammo > 0) {
       this._fire(w, camera);
-      w.cooldown = w.fireRate;
+      w.cooldown = w.fireRate * rateMul;
       w.ammo--;
       if (w.ammo <= 0) this.reload();
     }
