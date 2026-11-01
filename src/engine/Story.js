@@ -77,6 +77,7 @@ export class Story {
     const key = 'wave' + wave;
     if (BRIEFINGS[key] && !this.shown.has(key)) {
       this.shown.add(key);
+      this._briefWave = wave;
       this._queue = [BRIEFINGS[key]];
       this._showNextLine();
     }
@@ -95,10 +96,13 @@ export class Story {
     if (this._queue && this._queue.length > 0) { this._showNextLine(); return; }
     this._queue = null;
     this.el.narrative?.classList.remove('show');
-    // Resume world
-    if (this.game.state === 3) this.game.state = 1; // PLAYING
+    // Resume world hanya jika pointer lock masih ada; kalau tidak, tetap PAUSED + tampilkan pause overlay
+    if (this.game.state === 3) {
+      if (document.pointerLockElement) this.game.state = 1;
+      else { this.game.state = 3; this.game.hud?.showPause(); }
+    }
     // Setelah narrative selesai: baris objective di HUD
-    this.setObjective(objectiveFor(this.game.wave));
+    this.setObjective(objectiveFor(this._briefWave ?? this.game.wave));
   }
 
   setObjective(text) {

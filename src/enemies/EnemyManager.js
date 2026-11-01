@@ -105,7 +105,7 @@ export class EnemyManager {
   }
 
   reset() {
-    for (const e of this.enemies) this._cleanupEnemy(e);
+    for (let i = this.enemies.length - 1; i >= 0; i--) this._cleanupEnemy(this.enemies[i]);
     this.enemies = [];
     this.aliveEnemies = [];
     this.meshList.length = 0;
@@ -375,9 +375,9 @@ export class EnemyManager {
     if (dist > 0.1) enemy.mesh.lookAt(player.position.x, enemy.mesh.position.y, player.position.z);
 
     // Procedural animation: idle sway saat speed rendah, attack lunge saat menyerang
-    if (!enemy._lastPos) enemy._lastPos = new THREE.Vector3();
-    const speedNow = enemy.mesh.position.distanceTo(enemy._lastPos);
-    enemy._lastPos.copy(enemy.mesh.position);
+    const px = enemy.mesh.position.x, pz = enemy.mesh.position.z;
+    const speedNow = Math.hypot(px - (enemy._lastX ?? px), pz - (enemy._lastZ ?? pz));
+    enemy._lastX = px; enemy._lastZ = pz;
     const t = performance.now() / 1000;
     const sway = Math.sin(t * 3.2 + enemy.id * 1.7) * 0.025 * Math.max(0, 1 - speedNow * 8);
     enemy.mesh.scale.y = 1 + sway;
@@ -543,7 +543,7 @@ export class EnemyManager {
     const player = this._player;
     if (!player) return;
     enemy.hp -= damage;
-    enemy.staggerTimer = 0.1;
+    if (damage >= 15) enemy.staggerTimer = 0.1;
     // Hit-flash via timer — reset di update loop
     enemy.mesh.material.emissiveIntensity = 0.8;
     enemy.hitFlashTimer = 0.06;
@@ -587,8 +587,10 @@ export class EnemyManager {
     const explosionDamage = enemy.explosionDamage;
     const score = enemy.score;
     const wasLast = this.aliveEnemies.length === 1 && this.spawnQueue.length === 0 && this._telegraphs.length === 0;
+    const nearPlayer = this._player && pos.distanceTo(this._player.position) < 8;
     this._cleanupEnemy(enemy);
     this.particles.explosion(pos, explosionRadius);
+    if (nearPlayer) this._dropShard(pos, 'bomber');
     this.audio.playExplosion();
     this.game.spawnExplosionLight(pos, 0xff4400, 10, 12);
     this.game.shake.add(0.4);
@@ -617,6 +619,8 @@ export class EnemyManager {
     idx = this.enemies.indexOf(enemy);
     if (idx > -1) { const last = this.enemies.length - 1; if (idx !== last) this.enemies[idx] = this.enemies[last]; this.enemies.pop(); }
   }
+
+  get pendingSpawns() { return this._telegraphs?.length || 0; }
 
   collidesWith(enemy, player) {
     if (!enemy.alive) return false;

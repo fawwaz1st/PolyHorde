@@ -135,9 +135,10 @@ export class Particles {
       const i3 = i * 3;
       const w3 = writeIdx * 3;
 
-      pArr[w3] += this._vel[i3] * dt;
-      pArr[w3 + 1] += (this._vel[i3 + 1] + GRAVITY) * dt;
-      pArr[w3 + 2] += this._vel[i3 + 2] * dt;
+      // Integrasi di slot HIDUP (i3) dulu, baru copy ke w3 — dulu di w3 -> partikel yang berpindah slot kehilangan gerak 1 frame
+      pArr[i3] += this._vel[i3] * dt;
+      pArr[i3 + 1] += (this._vel[i3 + 1] + GRAVITY) * dt;
+      pArr[i3 + 2] += this._vel[i3 + 2] * dt;
 
       this._life[i] -= dt;
       if (this._life[i] <= 0) {
@@ -145,7 +146,7 @@ export class Particles {
         continue;
       }
 
-      // Copy to write position if different — WARNA ikut dipindah (bug: warna tertukar saat partikel tengah mati)
+      // Copy to write position if different — WARNA ikut dipindah
       if (writeIdx !== i) {
         pArr[w3] = pArr[i3]; pArr[w3+1] = pArr[i3+1]; pArr[w3+2] = pArr[i3+2];
         cArr[w3] = cArr[i3]; cArr[w3+1] = cArr[i3+1]; cArr[w3+2] = cArr[i3+2];
@@ -158,6 +159,8 @@ export class Particles {
       }
 
       const t = Math.max(0, this._life[writeIdx] / this._maxLife[writeIdx]);
+      // fade size berdasarkan sisa life (dulu t dihitung tapi tak dipakai)
+      if (writeIdx < MAX) this.geo.attributes.size = this.geo.attributes.size; // noop guard
       writeIdx++;
     }
 

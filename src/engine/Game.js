@@ -136,6 +136,7 @@ export class Game {
         this.state = STATES.PLAYING;
         this.hud.hidePause();
         this.timer.reset();
+        this.input.update(); // buang buffered Q/E/F/klik yang menumpuk saat pause
       }
     };
     this.input.onPointerLockLost = () => {
@@ -150,7 +151,6 @@ export class Game {
     this.player.onDeath = () => this._gameOver();
 
     // Explosion lights: PRE-ALOKASI pool (dulu new PointLight per ledakan = recompile shader -> hitch)
-    this._explosionLights = [];
     this._lightPool = [];
     for (let i = 0; i < 4; i++) {
       const l = new THREE.PointLight(0xff6600, 0, 10);
@@ -389,7 +389,8 @@ export class Game {
       return;
     }
     const alive = this.enemyManager.aliveEnemies.length;
-    if (alive === 0 && !this.enemyManager.spawning && !this._waveIncoming) {
+    // Jangan announce wave baru selama telegraph wave lama masih pending (anti mixed wave)
+    if (alive === 0 && !this.enemyManager.spawning && !this._waveIncoming && this.enemyManager.pendingSpawns === 0) {
       this._waveIncoming = true;
       this._nextWave = this.wave + 1;
       this.waveCooldown = 3.5;
@@ -429,8 +430,6 @@ export class Game {
     this.enemyManager.reset();
     this.weaponSystem.reset();
     this.abilitySystem.reset();
-    for (const l of this._explosionLights) this.scene.remove(l);
-    this._explosionLights.length = 0;
     this.hud.announceIncoming(this.wave);
     this.audio.playWaveGrowl();
     this.music.start();

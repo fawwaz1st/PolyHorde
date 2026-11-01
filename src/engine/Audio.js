@@ -79,6 +79,8 @@ export class Audio {
     hp.type = 'highpass'; hp.frequency.value = 1200;
     src.connect(hp).connect(n.gainNode);
     src.start(t);
+    src.stop(t + 0.04);
+    src.onended = () => { try { src.disconnect(); hp.disconnect(); } catch {} };
   }
 
   playReload() {
@@ -104,6 +106,8 @@ export class Audio {
     filter.frequency.setValueAtTime(2200, t);
     src.connect(filter).connect(n.gainNode);
     src.start(t);
+    src.stop(t + 0.05);
+    src.onended = () => { try { src.disconnect(); filter.disconnect(); } catch {} };
     // Armor-ping layer: metallic ringing partials
     this._tone('triangle', 2400 + Math.random() * 600, 1800, t, 0.09, 0.045);
   }
@@ -200,6 +204,8 @@ export class Audio {
     filter.frequency.exponentialRampToValueAtTime(50, t + 0.3);
     src.connect(filter).connect(n.gainNode);
     src.start(t);
+    src.stop(t + 0.35);
+    src.onended = () => { try { src.disconnect(); filter.disconnect(); } catch {} };
     // Sub thump
     this._tone('sine', 120, 30, t, 0.25, 0.3);
   }

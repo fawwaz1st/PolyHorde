@@ -181,6 +181,8 @@ export class WeaponSystem {
 
   _fire(w, camera) {
     this.audio.playShoot();
+    this.player.justFired = true;
+    this.player._justFiredT = 0.3;
     this.player.addRecoil(w.recoil);
     this.game.shake.add(w.recoil * 2);
     this.game.hud?.bumpFireBloom(w.recoil * 3);
