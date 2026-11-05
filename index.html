@@ -269,6 +269,24 @@ body.paused #radar::before { animation-play-state: paused; }
   </div>
 </div>
 
+<div id="draft" class="overlay">
+  <div style="text-align:center;padding:2rem 2.5rem;background:var(--panel);border:1px solid var(--line);border-radius:16px">
+    <h2 style="font-size:1.2rem;letter-spacing:0.2em;margin-bottom:0.5rem">PILIH UPGRADE</h2>
+    <div style="color:var(--dim);font-size:0.8rem;margin-bottom:1.5rem">Satu upgrade untuk wave berikutnya</div>
+    <div class="cards" style="display:flex;gap:1rem;justify-content:center"></div>
+  </div>
+  <style>
+    #draft .cards .card {
+      padding: 1.2rem 1rem; min-width: 130px; background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line); border-radius: 10px; color: var(--text);
+      transition: transform 0.15s, border-color 0.15s; cursor: pointer;
+    }
+    #draft .cards .card:hover { transform: translateY(-4px); border-color: var(--accent); }
+    #draft .card-name { font-weight: 700; font-size: 1rem; margin-bottom: 0.4rem; }
+    #draft .card-desc { font-size: 0.8rem; color: var(--dim); }
+  </style>
+</div>
+
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

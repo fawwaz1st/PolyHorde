@@ -60,7 +60,7 @@ export class Weapons {
     const w = this.current;
     if (this.reloading || w.ammo === w.mag) return;
     this.reloading = true;
-    this.reloadT = w.reload;
+    this.reloadT = w.reload * (this.game?.upgrades?.reload || 1);
     this.audio.reload();
   }
 
@@ -71,6 +71,7 @@ export class Weapons {
 
   update(dt, input, game) {
     const w = this.current;
+    const up = this.game?.upgrades || { damage: 1, fireRate: 1, reload: 1 };
     w.cd -= dt;
 
     // Hit flash timer
@@ -90,13 +91,13 @@ export class Weapons {
     const fire = w.auto ? input.mouse.left : input.mouseJustDown();
     if (fire && w.cd <= 0 && w.ammo > 0) {
       this._fire(w, game);
-      w.cd = w.fireRate;
+      w.cd = w.fireRate * (this.game?.upgrades?.fireRate || 1);
       w.ammo--;
       if (w.ammo <= 0) this.reload();
     }
 
     this._updateRockets(dt, game);
-    this._bobUpdate(dt);
+    this._bobUpdate(dt, input);
   }
 
   _fire(w, game) {
@@ -134,7 +135,7 @@ export class Weapons {
         let obj = h.object;
         while (obj && !obj.userData.enemy && obj.parent) obj = obj.parent;
         if (obj?.userData.enemy) {
-          obj.userData.enemy.damage(w.damage, w.kb, this._dir);
+          obj.userData.enemy.damage(w.damage * (this.game?.upgrades?.damage || 1), w.kb, this._dir);
           this.effects.impact(h.point, w.color);
           this.audio.hit(h.point);
           game.ui?.setHitMarker(true);
@@ -193,12 +194,25 @@ export class Weapons {
     }
   }
 
-  _bobUpdate(dt) {
+  _bobUpdate(dt, input) {
     this._bob += dt;
     const speed = Math.hypot(this.player.vel.x, this.player.vel.z);
     const b = Math.sin(this._bob * 9) * 0.008 * Math.min(speed, 8);
-    this.group.position.y = -0.12 * 0 + b;
+    this.group.position.y = b;
     this.group.position.x = Math.sin(this._bob * 6) * 0.004 * Math.min(speed, 8);
+    // Sway: senjata tertinggal dari gerak kamera (momentum)
+    if (input && this.engine.camera) {
+      const lookSpeed = Math.abs(input.mouse.dx) + Math.abs(input.mouse.dy);
+      this._swayX = (this._swayX || 0) + (input.mouse.dx * 0.0004 - (this._swayX || 0)) * 0.1;
+      this._swayY = (this._swayY || 0) + (input.mouse.dy * 0.0004 - (this._swayY || 0)) * 0.1;
+      this.group.rotation.y = -this._swayX;
+      this.group.rotation.x = -this._swayY * 0.6;
+    }
+    // Reload dip
+    if (this.reloading) {
+      const t = 1 - this.reloadT / this.current.reload;
+      this.group.rotation.x += Math.sin(t * Math.PI) * 0.4;
+    }
     if (this._switchT > 0) {
       this._switchT -= dt;
       const t = Math.max(0, this._switchT) / 0.16;

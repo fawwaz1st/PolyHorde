@@ -28,6 +28,8 @@ export class Game {
     this.waveCooldown = 0;
     this._waveIncoming = false;
     this._nextWave = 0;
+    // Upgrade state (reset tiap run)
+    this.upgradesInit();
     this.sensitivity = 1;
     this.reducedMotion = false;
 
@@ -52,6 +54,7 @@ export class Game {
       this.audio.resume();
     };
     this.input.onUnlock = () => {
+      if (this._inDraft) return; // draft aktif: jangan tampilkan pause
       if (this.state === STATE.PLAYING) { this.state = STATE.PAUSED; this.ui.showPause(); document.body.classList.add('paused'); }
     };
   }
@@ -60,6 +63,7 @@ export class Game {
     await this.engine.init();
     this.world = new World(this.engine.scene);
     this.player = new Player(this.engine, this.input, this.world, this.audio);
+    this.player.game = this;
     this.weapons = new Weapons(this.engine, this.player, this.audio, this.effects);
     this.enemies = new Enemies(this.engine, this.world, this.audio, this.effects);
 
@@ -112,6 +116,40 @@ export class Game {
     this.ui.showMenu();
     this._loop = this._loop.bind(this);
     requestAnimationFrame(this._loop);
+  }
+
+  upgradesInit() {
+    this.upgrades = { damage: 1, fireRate: 1, reload: 1, speed: 1, maxHp: 1, armor: 1, shard: 1 };
+  }
+
+  // Draft 3 kartu upgrade — pilih 1, lanjut wave berikutnya
+  _draft() {
+    const pool = [
+      { id: 'hp',     name: 'Vitality',   desc: 'Max HP +20',                 apply: () => { this.upgrades.maxHp += 0.2; this.player.maxHp = Math.round(100 * this.upgrades.maxHp); this.player.heal(20); } },
+      { id: 'damage', name: 'Amplifier',  desc: 'Semua damage +15%',          apply: () => { this.upgrades.damage += 0.15; } },
+      { id: 'rate',   name: 'Trigger',    desc: 'Fire rate +12%',           apply: () => { this.upgrades.fireRate -= 0.12; } },
+      { id: 'dash',   name: 'Reflex',     desc: 'Dash cooldown -25%',       apply: () => { this.player.dashCdMax *= 0.75; } },
+      { id: 'reload', name: 'Fast Hands', desc: 'Reload -20%',              apply: () => { this.upgrades.reload *= 0.8; } },
+      { id: 'speed',  name: 'Boots',      desc: 'Move speed +8%',           apply: () => { this.upgrades.speed += 0.08; } },
+      { id: 'armor',  name: 'Plating',    desc: 'Damage diterima -12%',     apply: () => { this.upgrades.armor *= 0.88; } },
+      { id: 'shard',  name: 'Siphon',     desc: 'Shard heal +50%',          apply: () => { this.upgrades.shard *= 1.5; } },
+    ];
+    const picks = [];
+    while (picks.length < 3 && pool.length > picks.length) {
+      const i = (Math.random() * pool.length) | 0;
+      if (!picks.includes(pool[i])) picks.push(pool[i]);
+    }
+    this._inDraft = true;
+    this.state = 2; // PAUSED
+    document.exitPointerLock?.(); // agar kursor bisa klik kartu
+    this.ui.showDraft(picks, (card) => {
+      card.apply();
+      this._inDraft = false;
+      this.state = 1;
+      this.waveCooldown = 0.5;
+      const p = document.body.requestPointerLock();
+      if (p && p.catch) p.catch(() => {});
+    });
   }
 
   // --- State ---
@@ -378,6 +416,8 @@ export class Game {
       this.score += this.wave * 50;
       this.grenades = 3;
       this.player.heal(8);
+      // Draft upgrade antar-wave (progresi dalam-run, reset tiap run)
+      if (this.upgrades) this._draft();
     }
   }
 

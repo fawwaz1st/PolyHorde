@@ -225,6 +225,20 @@ export class UI {
   hideMenu() { this.el.menu?.classList.remove('show'); }
   showPause() { this.el.pause?.classList.add('show'); }
   hidePause() { this.el.pause?.classList.remove('show'); }
+  showDraft(cards, onPick) {
+    const el = document.getElementById('draft');
+    if (!el) { onPick(cards[0]); return; }
+    el.querySelector('.cards').innerHTML = '';
+    for (const c of cards) {
+      const btn = document.createElement('button');
+      btn.className = 'card';
+      btn.innerHTML = '<div class="card-name">' + c.name + '</div><div class="card-desc">' + c.desc + '</div>';
+      btn.addEventListener('click', () => { el.classList.remove('show'); onPick(c); });
+      el.querySelector('.cards').appendChild(btn);
+    }
+    el.classList.add('show');
+  }
+
   showGameOver(score, wave, kills, high) {
     this.el.gameover?.classList.add('show');
     document.getElementById('go-score').textContent = 'Score ' + score;

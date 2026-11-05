@@ -14,6 +14,7 @@ export class Player {
     this.input = input;
     this.world = world;
     this.audio = audio;
+    this.game = null; // di-set Game
 
     this.pos = new THREE.Vector3(0, 1, 0);
     this.vel = new THREE.Vector3();
@@ -63,7 +64,8 @@ export class Player {
 
   takeDamage(amount) {
     if (!this.alive || this.shieldActive) return;
-    this.hp = Math.max(0, this.hp - amount);
+    const armor = this.game?.upgrades?.armor || 1;
+    this.hp = Math.max(0, this.hp - amount * armor);
     if (this.hp <= 0) { this.alive = false; }
   }
 
@@ -104,7 +106,7 @@ export class Player {
       let mx = fx * (f ? 1 : 0) - fx * (b ? 1 : 0) + rx * (r ? 1 : 0) - rx * (l ? 1 : 0);
       let mz = fz * (f ? 1 : 0) - fz * (b ? 1 : 0) + rz * (r ? 1 : 0) - rz * (l ? 1 : 0);
       const ml = Math.hypot(mx, mz);
-      const sprint = this.input.isDown('ShiftLeft') ? SPRINT : SPEED;
+      const sprint = (this.input.isDown('ShiftLeft') ? SPRINT : SPEED) * (this.game?.upgrades?.speed || 1);
       if (ml > 0) {
         mx /= ml; mz /= ml;
         this.vel.x = mx * sprint;

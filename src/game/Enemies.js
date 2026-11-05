@@ -19,6 +19,7 @@ export class Enemies {
     this.audio = audio;
     this.effects = effects;
     this.list = [];
+    this._dying = [];
     this.projectiles = [];
     this._projPool = [];
     const pg = new THREE.SphereGeometry(0.1, 4, 4);
@@ -87,8 +88,31 @@ export class Enemies {
     const score = e.def.score;
     this.effects.death(pos, e.def.color);
     this.audio.kill(pos);
-    this._remove(e);
+    // Animasi kematian: jatuh + menyusut selama 0.3s
+    this._dying.push({ e, t: 0.3 });
+    this._removeFromList(e);
     Events.emit('enemy-killed', { score, pos, type: e.type });
+  }
+
+  _removeFromList(e) {
+    const i = this.list.indexOf(e);
+    if (i > -1) { const last = this.list.length - 1; if (i !== last) this.list[i] = this.list[last]; this.list.pop(); }
+  }
+
+  _updateDying(dt) {
+    for (let i = this._dying.length - 1; i >= 0; i--) {
+      const d = this._dying[i];
+      d.t -= dt;
+      const e = d.e;
+      e.group.rotation.x -= dt * 6; // jatuh ke belakang
+      const s = Math.max(0.01, d.t / 0.3);
+      e.group.scale.setScalar(s);
+      e.group.position.y -= dt * 1.2; // tenggelam
+      if (d.t <= 0) {
+        this.engine.scene.remove(e.group);
+        this._dying.splice(i, 1);
+      }
+    }
   }
 
   _remove(e) {
@@ -149,6 +173,7 @@ export class Enemies {
       this._ai(e, dt, player, game, e._attacking);
       if (wasAttacking && !e._attacking) { /* berhenti menyerang */ }
     }
+    this._updateDying(dt);
     this._updateProjectiles(dt, player, game);
   }
 
