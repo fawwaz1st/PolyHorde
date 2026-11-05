@@ -1,448 +1,273 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%230a0a1a'/%3E%3Cpolygon points='8,2 14,13 2,13' fill='%23f44'/%3E%3C/svg%3E">
-  <title>POLY-HORDE</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; }
-    canvas { display: block; }
-    body { user-select: none; -webkit-user-select: none; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>POLYHORDE</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2307070f'/%3E%3Cpath d='M16 5 L27 25 L5 25 Z' fill='none' stroke='%23ff5566' stroke-width='2.5'/%3E%3Ccircle cx='16' cy='18' r='3' fill='%236fb7ff'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #07070f;
+  --panel: rgba(10, 12, 24, 0.82);
+  --line: rgba(120, 140, 255, 0.22);
+  --text: #e8ecff;
+  --dim: #8a93b8;
+  --accent: #6fb7ff;
+  --accent2: #ff5566;
+  --good: #4ade80;
+  --warn: #facc15;
+  --bad: #f87171;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --mono: 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font); }
+canvas { display: block; }
+button { font-family: inherit; cursor: pointer; }
 
-    /* === Blocker / Menu === */
-    #blocker {
-      position: fixed; inset: 0; z-index: 100;
-      background: rgba(0,0,0,0.85);
-      display: flex; align-items: center; justify-content: center;
-      cursor: pointer;
-      font-family: 'Courier New', monospace; color: #fff;
-      transition: opacity 0.5s;
-    }
-    #blocker.hidden { opacity: 0; pointer-events: none; }
-    #blocker .title {
-      font-size: 3.5rem; font-weight: bold;
-      letter-spacing: 0.5rem; text-transform: uppercase;
-      text-shadow: 0 0 30px #f44, 0 0 60px #f44;
-    }
-    #blocker .subtitle { font-size: 1rem; opacity: 0.6; margin-top: 0.5rem; }
-    #blocker .click-msg {
-      margin-top: 2.5rem; font-size: 1.2rem;
-      animation: pulse 1.5s ease-in-out infinite;
-      border: 1px solid rgba(255,255,255,0.3);
-      padding: 0.8rem 2rem;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    #blocker .click-msg:hover { background: rgba(255,255,255,0.1); }
-    @keyframes pulse { 0%,100%{opacity:0.4} 50%{opacity:1} }
-    #blocker .controls-info {
-      margin-top: 1.5rem; font-size: 0.75rem; opacity: 0.4;
-      line-height: 1.6;
-    }
-    .menu-high { margin-top: 1.2rem; font-size: 0.95rem; color: #ff4; opacity: 0.85; letter-spacing: 0.05rem; }
-    .lock-warn { margin-top: 1rem; font-size: 0.75rem; color: #fa4; opacity: 0.8; max-width: 26rem; }
+/* ---------- Overlay umum ---------- */
+.overlay {
+  position: fixed; inset: 0; z-index: 100;
+  display: none; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(10,12,24,0.55), rgba(5,6,12,0.92));
+  backdrop-filter: blur(6px);
+}
+.overlay.show { display: flex; }
 
-    /* === HUD === */
-    #hud {
-      position: fixed; inset: 0; z-index: 10;
-      pointer-events: none; font-family: 'Courier New', monospace;
-      color: #fff; display: none;
-    }
-    #hud.show { display: block; }
-    #hud > * { pointer-events: auto; }
+/* ---------- Menu ---------- */
+#menu .card {
+  text-align: center; padding: 3rem 3.5rem;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  max-width: 34rem;
+}
+.logo { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-bottom: 0.5rem; }
+.logo svg { width: 56px; height: 56px; }
+.title { font-size: 3rem; font-weight: 800; letter-spacing: 0.18em; line-height: 1; }
+.title span { color: var(--accent2); }
+.subtitle { color: var(--dim); font-size: 0.9rem; letter-spacing: 0.28em; text-transform: uppercase; margin-top: 0.5rem; }
+.play-btn {
+  margin-top: 2rem; padding: 1rem 3rem; font-size: 1.05rem; font-weight: 700; letter-spacing: 0.1em;
+  color: #fff; background: linear-gradient(135deg, var(--accent), #4a7dff);
+  border: none; border-radius: 10px; transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 4px 24px rgba(111,183,255,0.35);
+}
+.play-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(111,183,255,0.5); }
+.ghost-btn {
+  margin-top: 1rem; padding: 0.7rem 1.5rem; font-size: 0.85rem; color: var(--dim);
+  background: transparent; border: 1px solid var(--line); border-radius: 8px;
+}
+.ghost-btn:hover { color: var(--text); border-color: var(--accent); }
+.controls-grid {
+  margin-top: 2rem; display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem 1.5rem;
+  font-size: 0.8rem; color: var(--dim); text-align: left;
+}
+.controls-grid b { color: var(--text); font-family: var(--mono); font-weight: 600; }
+.high { margin-top: 1.5rem; font-size: 0.85rem; color: var(--warn); letter-spacing: 0.08em; }
 
-    .hud-top {
-      display: flex; justify-content: space-between; padding: 1rem;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-    }
-    .hud-left { text-align: left; }
-    .hud-right { text-align: right; }
+/* ---------- HUD ---------- */
+#hud { position: fixed; inset: 0; z-index: 10; pointer-events: none; display: none; font-family: var(--font); }
+#hud.show { display: block; }
+#hud .corner { position: absolute; padding: 1.2rem; }
+#hud .tl { top: 0; left: 0; }
+#hud .tr { top: 0; right: 0; text-align: right; }
+#hud .bl { bottom: 0; left: 0; }
+#hud .br { bottom: 0; right: 0; text-align: right; }
 
-    #wave-display { font-size: 1.5rem; font-weight: bold; color: #f44; }
-    #enemy-count { font-size: 0.9rem; opacity: 0.7; margin-top: 0.2rem; }
-    #score-display { font-size: 1.2rem; margin-top: 0.3rem; }
+#wave { font-family: var(--mono); font-size: 1.3rem; font-weight: 700; color: var(--accent); letter-spacing: 0.12em; }
+#enemies { font-size: 0.8rem; color: var(--dim); margin-top: 0.25rem; }
+#score { font-family: var(--mono); font-size: 1.05rem; margin-top: 0.4rem; color: var(--text); }
 
-    .health-bar {
-      height: 10px; background: rgba(255,255,255,0.15);
-      border-radius: 5px; width: 200px; overflow: hidden;
-      margin-left: auto;
-    }
-    .health-fill {
-      height: 100%; background: linear-gradient(90deg, #f44, #ff6);
-      transition: width 0.15s; border-radius: 5px;
-    }
-    #health-text { font-size: 0.85rem; margin-top: 0.2rem; }
+.health-wrap { width: 220px; }
+.health-label { font-size: 0.7rem; letter-spacing: 0.2em; color: var(--dim); margin-bottom: 0.3rem; }
+.health-bar { height: 12px; background: rgba(255,255,255,0.08); border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+#health-fill { height: 100%; width: 100%; background: var(--good); transition: width 0.15s, background 0.3s; border-radius: 6px; }
+#health-text { font-family: var(--mono); font-size: 1.1rem; font-weight: 700; margin-top: 0.3rem; }
+#combo { font-family: var(--mono); font-size: 0.85rem; font-weight: 700; color: var(--warn); opacity: 0; transition: opacity 0.2s; margin-top: 0.4rem; }
 
-    .hud-bottom {
-      position: absolute; bottom: 1.5rem; left: 50%;
-      transform: translateX(-50%);
-      display: flex; gap: 0.4rem; align-items: center;
-    }
-    .weapon-slot {
-      padding: 0.35rem 0.7rem;
-      border: 2px solid rgba(255,255,255,0.2);
-      border-radius: 4px; font-size: 0.75rem;
-      background: rgba(0,0,0,0.6);
-      transition: all 0.15s; text-align: center;
-      min-width: 70px;
-    }
-    .weapon-slot .key-hint {
-      font-size: 0.6rem; opacity: 0.5; display: block;
-      margin-bottom: 2px;
-    }
-    .weapon-slot .ammo {
-      font-size: 0.65rem; opacity: 0.6;
-    }
-    .weapon-slot.active {
-      border-color: #f44;
-      background: rgba(255,68,68,0.15);
-      box-shadow: 0 0 15px rgba(255,68,68,0.3);
-    }
-    .weapon-slot.active .key-hint { color: #f44; opacity: 0.8; }
+.weapon-wrap { text-align: right; }
+#weapon-name { font-size: 0.75rem; letter-spacing: 0.2em; color: var(--dim); text-transform: uppercase; }
+#ammo { font-family: var(--mono); font-size: 2rem; font-weight: 800; line-height: 1; }
+#ammo.low { color: var(--bad); }
 
-    #ability-hud {
-      position: absolute; bottom: 1.5rem; right: 1.5rem;
-      display: flex; flex-direction: column; gap: 0.3rem;
-    }
-    .ability-slot {
-      padding: 0.3rem 0.6rem;
-      border: 1px solid rgba(255,255,255,0.15);
-      border-radius: 4px; font-size: 0.7rem;
-      background: rgba(0,0,0,0.5); text-align: right;
-      transition: all 0.2s; min-width: 80px;
-    }
-    .ability-slot .key-hint { color: #4f4; font-weight: bold; }
-    .ability-slot.ready { border-color: #4f4; opacity: 1; }
-    .ability-slot.cooldown { border-color: rgba(255,255,255,0.1); opacity: 0.4; }
-    .ability-slot.active { border-color: #ff4; background: rgba(255,255,68,0.1); }
+#objective {
+  position: absolute; top: 1.2rem; left: 50%; transform: translateX(-50%);
+  font-size: 0.78rem; color: var(--dim); letter-spacing: 0.05em; text-align: center;
+  max-width: 30rem;
+}
+#announce {
+  position: absolute; top: 32%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 2.6rem; font-weight: 800; letter-spacing: 0.2em; text-align: center;
+  opacity: 0; transition: opacity 0.4s; text-shadow: 0 0 30px rgba(111,183,255,0.6);
+}
+#announce.incoming { color: var(--warn); }
+#announce .sub { font-size: 0.9rem; font-weight: 400; letter-spacing: 0.1em; color: var(--dim); margin-top: 0.5rem; }
 
-    /* === Crosshair === */
-    #crosshair {
-      position: fixed; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 11; pointer-events: none;
-      width: 24px; height: 24px;
-    }
-    #crosshair { --gap: 6px; }
-    #crosshair::before, #crosshair::after {
-      content: ''; position: absolute; background: rgba(255,255,255,0.8);
-      transition: all 0.06s linear;
-    }
-    #crosshair::before { width: 2px; height: 10px; top: calc(50% - 5px - var(--gap)); left: calc(50% - 1px); }
-    #crosshair::after { width: 10px; height: 2px; top: calc(50% - 1px); left: calc(50% - 5px - var(--gap)); }
-    #crosshair.hit { opacity: 0; }
-    #crosshair-hit {
-      position: fixed; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 12; pointer-events: none;
-      width: 40px; height: 40px;
-      opacity: 0; transition: opacity 0.1s;
-    }
-    #crosshair-hit.show { opacity: 1; }
-    #crosshair-hit::before, #crosshair-hit::after {
-      content: ''; position: absolute; background: #f44; border-radius: 50%;
-    }
-    #crosshair-hit::before { width: 4px; height: 4px; top: 18px; left: 18px; }
-    #crosshair-hit::after {
-      width: 20px; height: 20px; top: 10px; left: 10px;
-      border: 2px solid #f44; background: transparent;
-    }
+#radar {
+  position: absolute; bottom: 1.2rem; left: 1.2rem; width: 110px; height: 110px;
+  border-radius: 50%; border: 1px solid var(--line); background: rgba(8,10,20,0.6);
+  overflow: hidden;
+}
+#radar::before {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, rgba(111,183,255,0.25), transparent 70deg);
+  animation: sweep 3s linear infinite;
+}
+@keyframes sweep { to { transform: rotate(360deg); } }
+.radar-ring { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); border: 1px solid rgba(255,255,255,0.07); border-radius: 50%; }
+.radar-dot { position: absolute; width: 6px; height: 6px; border-radius: 2px; transform: translate(-50%,-50%); transition: opacity 0.3s; }
+.radar-player {
+  position: absolute; left: 50%; top: 50%; width: 0; height: 0;
+  border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid #fff;
+  transform: translate(-50%,-50%);
+}
 
-    /* === Reduced motion (aksesibilitas) === */
-    body.reduced-motion #radar::after { animation: none; }
-    body.reduced-motion #blocker .click-msg,
-    body.reduced-motion #pause-overlay .pause-sub,
-    body.reduced-motion #narrative-skip { animation: none; }
-    body.reduced-motion #wave-announce { animation: none; }
-    body.reduced-motion #damage-overlay.lowhp { animation: none; }
-    body.reduced-motion #damage-overlay.lowhp { border-color: rgba(255,0,0,0.5); border-width: 10px; }
-    @media (prefers-reduced-motion: reduce) {
-      #radar::after { animation: none; }
-      #blocker .click-msg, #pause-overlay .pause-sub, #narrative-skip { animation: none; }
-    }
+/* Crosshair & hitmarker */
+#crosshair { position: fixed; left: 50%; top: 50%; width: 0; height: 0; z-index: 11; --gap: 6px; }
+#crosshair span { position: absolute; background: rgba(255,255,255,0.9); }
+#crosshair .h { width: 8px; height: 2px; top: -1px; }
+#crosshair .v { width: 2px; height: 8px; left: -1px; }
+#crosshair .l { left: calc(-8px - var(--gap)); }
+#crosshair .r { left: var(--gap); }
+#crosshair .t { top: calc(-8px - var(--gap)); }
+#crosshair .b { top: var(--gap); }
+#crosshair .dot { width: 2px; height: 2px; left: -1px; top: -1px; border-radius: 50%; }
+#hitmarker {
+  position: fixed; left: 50%; top: 50%; width: 24px; height: 24px; z-index: 12;
+  transform: translate(-50%,-50%) rotate(45deg); opacity: 0; transition: opacity 0.12s;
+}
+#hitmarker.show { opacity: 1; }
+#hitmarker::before, #hitmarker::after { content: ''; position: absolute; background: var(--accent2); }
+#hitmarker::before { width: 2px; height: 100%; left: 11px; }
+#hitmarker::after { width: 100%; height: 2px; top: 11px; }
 
-    /* === FEVER tier === */
-    #fever-display.tier1 { color: #ff8; text-shadow: 0 0 8px rgba(255,255,136,0.6); }
-    #fever-display.tier2 { color: #ff6; text-shadow: 0 0 12px rgba(255,255,68,0.7); }
-    #fever-display.tier3 { color: #f66; text-shadow: 0 0 16px rgba(255,68,68,0.8); }
+#damage-vignette {
+  position: fixed; inset: 0; z-index: 9; pointer-events: none; opacity: 0; transition: opacity 0.15s;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(255,40,40,0.35) 100%);
+}
+#damage-vignette.show { opacity: 1; }
+#damage-vignette::before {
+  content: ''; position: absolute; inset: 0;
+  background: conic-gradient(from var(--dir, 0deg), transparent 0deg, transparent 300deg, rgba(255,60,60,0.25) 340deg, transparent 360deg);
+}
 
-    /* === Radar taktis === */
-    #radar {
-      position: absolute; bottom: 1.5rem; left: 1.5rem;
-      width: 120px; height: 120px; border-radius: 50%;
-      border: 2px solid rgba(255,255,255,0.25);
-      background: radial-gradient(circle, rgba(0,40,80,0.35), rgba(0,0,0,0.6));
-      overflow: hidden;
-    }
-    #radar::after {
-      content: ''; position: absolute; inset: 0; z-index: 1;
-      background: conic-gradient(from 0deg, rgba(0,255,170,0.25), transparent 60deg);
-      animation: radar-sweep 3s linear infinite;
-    }
-    @keyframes radar-sweep { to { transform: rotate(360deg); } }
-    .radar-player {
-      position: absolute; left: 50%; top: 50%; z-index: 3;
-      width: 0; height: 0;
-      border-left: 5px solid transparent;
-      border-right: 5px solid transparent;
-      border-bottom: 8px solid #fff;
-      transform: translate(-50%, -50%);
-    }
-    .radar-ring {
-      position: absolute; left: 50%; top: 50%; z-index: 0;
-      transform: translate(-50%, -50%);
-      border: 1px solid rgba(255,255,255,0.08); border-radius: 50%;
-    }
-    .radar-dot {
-      position: absolute; z-index: 2;
-      width: 6px; height: 6px; border-radius: 50%;
-      background: #f66; transform: translate(-50%, -50%);
-      box-shadow: 0 0 6px currentColor; transition: opacity 0.3s;
-    }
+#hint {
+  position: fixed; bottom: 8rem; left: 50%; transform: translateX(-50%); z-index: 30;
+  padding: 0.5rem 1rem; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  font-size: 0.8rem; color: var(--text); opacity: 0; transition: opacity 0.3s; pointer-events: none;
+}
+#hint.show { opacity: 1; }
 
-    /* === Wave announcement === */
-    #wave-announce {
-      position: fixed; top: 40%; left: 50%;
-      transform: translate(-50%, -50%); z-index: 20;
-      pointer-events: none; font-family: 'Courier New', monospace;
-      font-size: 3rem; color: #f44;
-      text-shadow: 0 0 30px #f44, 0 0 60px #f44;
-      opacity: 0; transition: opacity 0.4s;
-      text-align: center;
-    }
-    #wave-announce .sub { font-size: 1.2rem; color: #fff; opacity: 0.6; }
+#boss-bar { position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%); width: 40%; z-index: 12; display: none; }
+#boss-bar .label { font-size: 0.7rem; letter-spacing: 0.25em; color: var(--warn); text-align: center; margin-bottom: 0.3rem; }
+#boss-bar .bar { height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+#boss-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #f59e0b, #ef4444); transition: width 0.2s; }
 
-    /* === Narrative overlay (story mode) === */
-    #narrative {
-      position: fixed; inset: 0; z-index: 120;
-      display: none; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.88);
-      font-family: 'Courier New', monospace; color: #cfd;
-      cursor: pointer;
-    }
-    #narrative.show { display: flex; }
-    #narrative-text {
-      max-width: 34rem; font-size: 1.05rem; line-height: 1.6;
-      text-align: left; white-space: pre-wrap;
-      text-shadow: 0 0 8px rgba(100,255,180,0.35);
-    }
-    #narrative-skip {
-      position: absolute; bottom: 2.5rem; font-size: 0.75rem; opacity: 0.5;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
+/* ---------- Pause ---------- */
+#pause .card { text-align: center; padding: 2.5rem 3rem; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; }
+#pause h2 { font-size: 2rem; letter-spacing: 0.2em; margin-bottom: 1.5rem; }
+.settings { display: flex; flex-direction: column; gap: 0.9rem; margin: 1.5rem 0; text-align: left; }
+.settings label { display: flex; align-items: center; justify-content: space-between; gap: 1rem; font-size: 0.85rem; color: var(--dim); }
+.settings input[type=range] { width: 160px; accent-color: var(--accent); }
+.settings input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+.pause-btns { display: flex; gap: 0.8rem; justify-content: center; }
 
-    /* === Micro-hint toast === */
-    #hint-toast {
-      position: fixed; bottom: 8.5rem; left: 50%; transform: translateX(-50%);
-      z-index: 25; pointer-events: none;
-      font-family: 'Courier New', monospace; font-size: 0.8rem;
-      color: #fff; background: rgba(0,0,0,0.72);
-      border: 1px solid rgba(100,255,170,0.4); border-radius: 4px;
-      padding: 0.45rem 0.9rem; opacity: 0; transition: opacity 0.3s;
-      text-shadow: 0 0 6px rgba(100,255,170,0.4);
-    }
-    #hint-toast.show { opacity: 1; }
+/* ---------- Game over ---------- */
+#gameover .card { text-align: center; padding: 2.5rem 3rem; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; }
+#gameover h2 { font-size: 2.5rem; letter-spacing: 0.2em; color: var(--accent2); margin-bottom: 1rem; }
+.go-stats { font-family: var(--mono); font-size: 1rem; line-height: 1.9; color: var(--dim); }
+.go-stats b { color: var(--text); }
+#go-high { color: var(--warn); font-weight: 700; margin-top: 0.5rem; display: none; }
 
-    /* === Objective HUD === */
-    #objective {
-      position: fixed; top: 1.2rem; left: 50%; transform: translateX(-50%);
-      z-index: 12; pointer-events: none;
-      font-family: 'Courier New', monospace; font-size: 0.78rem;
-      color: #8cf; letter-spacing: 0.08rem; opacity: 0.85;
-      text-shadow: 0 0 6px rgba(100,200,255,0.4);
-    }
-    #wave-announce.incoming { color: #ff4; animation: incoming-pulse 0.6s ease-in-out infinite; }
-    @keyframes incoming-pulse {
-      0%, 100% { transform: translate(-50%, -50%) scale(1); }
-      50% { transform: translate(-50%, -50%) scale(1.06); }
-    }
-
-    /* === Game Over === */
-    #game-over {
-      position: fixed; inset: 0; z-index: 200;
-      display: none; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.9);
-      font-family: 'Courier New', monospace; color: #fff;
-    }
-    #game-over.show { display: flex; }
-    #game-over .go-title {
-      font-size: 4rem; color: #f44;
-      text-shadow: 0 0 40px #f44, 0 0 80px #f44;
-    }
-    #game-over .go-stats { margin-top: 2rem; font-size: 1.2rem; line-height: 2; }
-    #game-over .go-restart {
-      margin-top: 2rem; font-size: 1rem; cursor: pointer;
-      padding: 0.8rem 2.5rem;
-      border: 2px solid #fff; background: transparent;
-      color: #fff; font-family: inherit;
-      transition: 0.2s; letter-spacing: 0.1rem;
-    }
-    #game-over .go-restart:hover { background: #fff; color: #000; }
-    #game-over .go-new-high {
-      color: #ff4; font-size: 1.5rem; margin-top: 0.5rem;
-      display: none;
-    }
-
-    /* === Pause overlay === */
-    #pause-overlay {
-      position: fixed; inset: 0; z-index: 150;
-      display: none; align-items: center; justify-content: center;
-      background: rgba(0,0,0,0.78); backdrop-filter: blur(3px);
-      font-family: 'Courier New', monospace; color: #fff;
-      cursor: pointer;
-    }
-    #pause-overlay.show { display: flex; }
-    #pause-overlay .pause-title {
-      font-size: 3.5rem; letter-spacing: 0.4rem; color: #4ff;
-      text-shadow: 0 0 30px rgba(68,255,255,0.6);
-    }
-    #pause-overlay .pause-sub { font-size: 1rem; opacity: 0.6; margin-top: 0.8rem; animation: pulse 1.5s ease-in-out infinite; }
-    #pause-overlay .pause-restart {
-      margin-top: 2rem; font-size: 0.9rem; opacity: 0.75;
-      border: 1px solid rgba(255,255,255,0.3); padding: 0.6rem 1.5rem; border-radius: 4px;
-      display: inline-block;
-    }
-    #pause-overlay .pause-restart:hover { background: rgba(255,255,255,0.12); }
-
-    /* === Damage overlay === */
-    #damage-overlay {
-      position: fixed; inset: 0; z-index: 9;
-      pointer-events: none;
-      border: 8px solid transparent;
-      transition: border-color 0.1s;
-    }
-    #damage-overlay.hit {
-      border-color: rgba(255,0,0,0.4);
-    }
-    #damage-overlay.lowhp { animation: lowhp-pulse 0.9s ease-in-out infinite; }
-    @keyframes lowhp-pulse {
-      0%, 100% { border-color: rgba(255,0,0,0.25); border-width: 8px; }
-      50% { border-color: rgba(255,0,0,0.7); border-width: 12px; }
-    }
-    /* Damage arc: tanpa blur (raster cost) */
-    #damage-arc .arc { filter: none; }
-    /* Radar sweep pause saat game pause */
-    body.paused #radar::after { animation-play-state: paused; }
-    /* Arc arah serangan: diputar sesuai azimuth penyerang — pemain tahu harus menghadap ke mana */
-    #damage-arc {
-      position: fixed; inset: 0; z-index: 9; pointer-events: none;
-      display: flex; align-items: center; justify-content: center;
-      opacity: 0;
-    }
-    #damage-arc.show { opacity: 1; }
-    #damage-arc .arc {
-      width: 240px; height: 240px; border-radius: 50%;
-      border: 14px solid transparent;
-      border-top-color: rgba(255,40,40,0.75);
-      filter: blur(1px);
-      transition: transform 0.08s linear;
-    }
-  </style>
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  #radar::before { animation: none; }
+}
+body.reduced-motion #radar::before { animation: none; }
+body.reduced-motion #announce { transition: none; }
+body.paused #radar::before { animation-play-state: paused; }
+</style>
 </head>
 <body>
-  <!-- Blocker / Start Screen -->
-  <div id="blocker">
-    <div style="text-align:center">
-      <div class="title">POLY-HORDE</div>
-      <div class="subtitle">— Low-Poly Arena FPS —</div>
-      <div class="click-msg">[ KLIK UNTUK MAIN ]</div>
-      <div id="menu-settings" style="margin-top:1rem;font-size:0.75rem;opacity:0.5;cursor:pointer">[ ⚙ Settings ]</div>
-      <div id="menu-high" class="menu-high" style="display:none"></div>
-      <div class="controls-info">
-        WASD — Gerak | Mouse — Lihat | Klik Kiri — Tembak<br>
-        1-4 — Ganti Senjata | R — Reload | Scroll — Ganti Senjata<br>
-        Q — Dash | E — Shield | F — Grenade | Space — Lompat<br>
-        ESC — Pause
-      </div>
-      <div id="lock-warn" class="lock-warn" style="display:none">Pointer lock ditolak browser — coba klik lagi, atau buka di tab terpisah.</div>
+
+<div id="hud">
+  <div class="corner tl">
+    <div id="wave">WAVE 0</div>
+    <div id="enemies">0</div>
+    <div id="score">SCORE 0</div>
+  </div>
+  <div class="corner tr">
+    <div class="health-wrap">
+      <div class="health-label">HP</div>
+      <div class="health-bar"><div id="health-fill"></div></div>
+      <div id="health-text">100</div>
+      <div id="combo"></div>
     </div>
   </div>
-
-  <!-- HUD -->
-  <div id="hud">
-    <div class="hud-top">
-      <div class="hud-left">
-        <div id="wave-display">WAVE 0</div>
-        <div id="enemy-count">Musuh: 0</div>
-        <div id="score-display">SCORE: 0</div>
-      </div>
-      <div class="hud-right">
-        <div class="health-bar"><div class="health-fill" id="health-fill" style="width:100%"></div></div>
-        <div id="health-text">100 HP</div>
-        <div id="combo-display" style="font-size:0.7rem;opacity:0;transition:opacity 0.2s">COMBO x1</div>
-        <div id="fever-display" style="font-size:0.85rem;opacity:0;transition:opacity 0.3s;font-weight:bold;margin-top:0.15rem"></div>
-      </div>
-    </div>
-    <div class="hud-bottom" id="weapon-hud"></div>
-    <div id="ability-hud"></div>
-
-    <!-- Radar taktis (blips musuh) -->
+  <div class="corner br weapon-wrap">
+    <div id="weapon-name">PISTOL</div>
+    <div id="ammo">9 / 9</div>
+  </div>
+  <div class="corner bl">
     <div id="radar"></div>
   </div>
-
-  <!-- Crosshair -->
-  <div id="crosshair"></div>
-  <div id="crosshair-hit"></div>
-
-  <!-- Pause overlay (ESC melepas pointer lock) -->
-  <div id="pause-overlay">
-    <div style="text-align:center">
-      <div class="pause-title">PAUSED</div>
-      <div class="pause-sub">Klik untuk lanjut bertempur</div>
-      <div style="margin-top:1.5rem;display:flex;flex-direction:column;gap:0.5rem;align-items:center">
-        <label style="font-size:0.8rem;opacity:0.75;display:flex;align-items:center;gap:0.6rem">
-          Sensitivitas <input id="set-sens" type="range" min="0.3" max="3" step="0.1" value="1" style="width:140px">
-        </label>
-        <label style="font-size:0.8rem;opacity:0.75;display:flex;align-items:center;gap:0.6rem">
-          Volume Musik <input id="set-music" type="range" min="0" max="1" step="0.05" value="0.55" style="width:140px">
-        </label>
-        <label style="font-size:0.8rem;opacity:0.75;display:flex;align-items:center;gap:0.6rem">
-          <input id="set-mute" type="checkbox"> Bisukan semua
-        </label>
-        <label style="font-size:0.8rem;opacity:0.75;display:flex;align-items:center;gap:0.6rem">
-          <input id="set-reduced" type="checkbox"> Kurangi gerak (reduced motion)
-        </label>
-      </div>
-      <button class="pause-restart" id="pause-restart" style="background:transparent;color:#fff;font-family:inherit;cursor:pointer;">[ RESTART RUN ]</button>
-    </div>
-  </div>
-
-  <!-- Damage overlay + indikator arah serangan -->
-  <div id="damage-overlay"></div>
-  <div id="damage-arc"></div>
-
-  <!-- Narrative overlay (story mode) -->
-  <div id="narrative">
-    <div id="narrative-text"></div>
-    <div id="narrative-skip">[ Space / Enter untuk lanjut ]</div>
-  </div>
-
-  <!-- Objective -->
   <div id="objective"></div>
+  <div id="announce"></div>
+</div>
 
-  <!-- Micro-hint toast (onboarding JIT) -->
-  <div id="hint-toast"></div>
+<div id="crosshair"><span class="h l"></span><span class="h r"></span><span class="v t"></span><span class="v b"></span><span class="dot"></span></div>
+<div id="hitmarker"></div>
+<div id="damage-vignette"></div>
+<div id="hint"></div>
+<div id="boss-bar"><div class="label">BOSS</div><div class="bar"><div id="boss-fill"></div></div></div>
 
-  <!-- Wave Announcement -->
-  <div id="wave-announce"></div>
+<div id="menu" class="overlay show">
+  <div class="card">
+    <div class="logo">
+      <svg viewBox="0 0 32 32" fill="none"><rect width="32" height="32" rx="6" fill="#0c0e1a"/><path d="M16 5 L27 25 L5 25 Z" stroke="#ff5566" stroke-width="2.5"/><circle cx="16" cy="18" r="3" fill="#6fb7ff"/></svg>
+      <div class="title">POLY<span>HORDE</span></div>
+    </div>
+    <div class="subtitle">Arena FPS &middot; Stylized Low-Poly</div>
+    <button class="play-btn" id="play-btn">MAIN</button>
+    <div class="controls-grid">
+      <div><b>WASD</b> gerak</div><div><b>Mouse</b> lihat / tembak</div>
+      <div><b>Shift</b> sprint</div><div><b>Space</b> lompat</div>
+      <div><b>Q</b> dash</div><div><b>E</b> shield</div>
+      <div><b>F</b> grenade</div><div><b>1-4</b> senjata</div>
+      <div><b>R</b> reload</div><div><b>ESC</b> pause</div>
+    </div>
+    <div class="high" id="menu-high" style="display:none"></div>
+  </div>
+</div>
 
-  <!-- Game Over -->
-  <div id="game-over">
-    <div style="text-align:center">
-      <div class="go-title">GAME OVER</div>
-      <div class="go-stats">
-        <div id="go-score">Score: 0</div>
-        <div id="go-wave">Wave: 0</div>
-        <div id="go-kills">Kills: 0</div>
-      </div>
-      <div class="go-new-high" id="go-new-high">★ HIGH SCORE BARU! ★</div>
-      <button class="go-restart" id="go-restart">[ MAIN LAGI (instan) ]</button>
+<div id="pause" class="overlay">
+  <div class="card">
+    <h2>PAUSED</h2>
+    <div class="settings">
+      <label>Sensitivitas <input type="range" id="set-sens" min="0.3" max="3" step="0.1" value="1"></label>
+      <label>Volume <input type="range" id="set-vol" min="0" max="1" step="0.05" value="0.8"></label>
+      <label>Bisukan <input type="checkbox" id="set-mute"></label>
+      <label>Reduced motion <input type="checkbox" id="set-reduced"></label>
+    </div>
+    <div class="pause-btns">
+      <button class="play-btn" id="resume-btn" style="margin-top:0">LANJUT</button>
+      <button class="ghost-btn" id="restart-btn" style="margin-top:0">RESTART</button>
     </div>
   </div>
+</div>
 
-  <script type="module" src="/src/main.js"></script>
+<div id="gameover" class="overlay">
+  <div class="card">
+    <h2>GAME OVER</h2>
+    <div class="go-stats">
+      <div>Score <b id="go-score">0</b></div>
+      <div>Wave <b id="go-wave">0</b></div>
+      <div>Kills <b id="go-kills">0</b></div>
+    </div>
+    <div id="go-high">★ HIGH SCORE BARU ★</div>
+    <button class="play-btn" id="go-restart" style="margin-top:1.5rem">MAIN LAGI</button>
+  </div>
+</div>
+
+<script type="module" src="/src/main.js"></script>
 </body>
 </html>

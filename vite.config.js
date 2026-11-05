@@ -2,6 +2,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: '.',
+  // GitHub Pages served di subpath /PolyHorde/ — WAJIB ada, aset tidak 404
+  base: '/PolyHorde/',
   publicDir: false, // tidak ada aset statis — semuanya prosedural
   server: {
     port: 5173,
