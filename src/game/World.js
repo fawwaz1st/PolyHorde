@@ -91,6 +91,16 @@ export class World {
       const radius = kind === 'pillar' ? 0.7 : kind === 'crystal' ? 0.9 : 0.8;
       this.props.push({ mesh, x, z, radius: radius + 0.4 });
     });
+    // Crates destruktibel: dipecahkan -> drop shard HP / ammo
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.8;
+      const r = 4 + (i % 2) * 3;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      const crate = buildProp('crate', 50 + i);
+      crate.position.set(x, 0.6, z);
+      this.scene.add(crate);
+      this.props.push({ mesh: crate, x, z, radius: 0.9, destructible: true, hp: 30, kind: 'crate' });
+    }
 
     // Zona lava (merah/oranye): berbahaya
     const lava = new THREE.Mesh(

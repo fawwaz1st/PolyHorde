@@ -145,6 +145,9 @@ export class Weapons {
           this.audio.hit(h.point);
           game.ui?.setHitMarker(true);
           this._hitFlash = 0.16;
+        } else if (obj && this._isDestructible(game, obj)) {
+          this._damageCrate(game, obj, w.damage, h.point);
+          this.effects.spark(h.point);
         } else {
           this.effects.spark(h.point);
         }
@@ -153,6 +156,24 @@ export class Weapons {
         const end = this._tmp.copy(this.player.position).addScaledVector(this._dir, 50);
         this.effects.tracer(this.player.position, end, w.color);
       }
+    }
+  }
+
+  _isDestructible(game, obj) {
+    return game.world.props.some(p => p.destructible && p.mesh === obj);
+  }
+
+  _damageCrate(game, obj, damage, point) {
+    const p = game.world.props.find(p => p.mesh === obj);
+    if (!p) return;
+    p.hp -= damage;
+    this.effects.spark(point);
+    if (p.hp <= 0) {
+      game.world.scene.remove(p.mesh);
+      game.world.props.splice(game.world.props.indexOf(p), 1);
+      this.effects.death(p.mesh.position.clone(), 0x8a6a4a);
+      if (Math.random() < 0.6) this.effects.shard(p.mesh.position, 'heavy');
+      else game.player.heal(5);
     }
   }
 
