@@ -134,7 +134,9 @@ export class Enemies {
   }
 
   update(dt, player, game) {
-    // Attack Token: maks 3 melee menyerang serentak (fairness, riset 2026)
+    // Attack Token berprioritas JARAK (bukan lotre): musuh terdekat dapat token duluan
+    // Hitung distance dulu untuk prioritas
+    for (const x of this.list) x._dist = x.pos.distanceTo(player.position);
     let meleeTokens = 3;
     for (const x of this.list) if (x.alive && x._attacking) meleeTokens--;
     // Iterate mundur (explode memodifikasi list)
@@ -168,7 +170,8 @@ export class Enemies {
       const wasAttacking = e._attacking;
       e._attacking = false;
       const eDist = e.pos.distanceTo(player.position);
-      if (e.def.type === 'melee' && eDist <= e.def.attackRange + 0.5 && meleeTokens > 0) {
+      const nearest = !this.list.some(x => x !== e && x.alive && x.def.type === 'melee' && x._dist < e._dist && x._dist <= e.def.attackRange + 0.5);
+      if (e.def.type === 'melee' && eDist <= e.def.attackRange + 0.5 && meleeTokens > 0 && nearest) {
         meleeTokens--; e._attacking = true;
       }
       this._ai(e, dt, player, game, e._attacking);
@@ -200,8 +203,7 @@ export class Enemies {
       case 'melee': {
         // Charge (heavy & boss)
         if ((e.type === 'heavy' || e.type === 'boss') && dist > 5 && dist < (e.type === 'boss' ? 16 : 12) && e.attackCd <= 0) {
-          e.charge = true;
-          e.chargeT = e.type === 'boss' ? 1.1 : 0.8;
+          e.windup = 0.25; // windup telegraph sebelum charge
         }
         if (e.charge) {
           e.chargeT -= dt;

@@ -36,6 +36,7 @@ export class Game {
     // Juice
     this.shake = { intensity: 0, offset: { x: 0, y: 0 }, add(v) { this.intensity = Math.min(this.intensity + v, 1.5); } };
     this._fovKick = 0;
+    this.fovKickVal = 0;
     this._hitStop = 0;
     this._baseFov = 78; // disinkronkan dengan FOV dasar Player
 
@@ -65,6 +66,7 @@ export class Game {
     this.player = new Player(this.engine, this.input, this.world, this.audio);
     this.player.game = this;
     this.weapons = new Weapons(this.engine, this.player, this.audio, this.effects);
+    this.weapons.game = this;
     this.enemies = new Enemies(this.engine, this.world, this.audio, this.effects);
 
     // Events
@@ -234,7 +236,7 @@ export class Game {
 
   // --- Juice ---
   hitStop(t) { this._hitStop = Math.max(this._hitStop, t); }
-  fovKick(v) { this._fovKick = Math.min(this._fovKick + v, 2.5); }
+  fovKick(v) { this._fovKick = Math.min(this._fovKick + v, 2.5); this.fovKickVal = this._fovKick; }
   hurtPlayer(pos) {
     this.audio.playerHurt(pos);
     this.ui.hurtDirection(pos, this.player.position, this.player.yaw);
@@ -253,16 +255,10 @@ export class Game {
     if (this.state === STATE.PLAYING) {
       this._update(sdt, dt);
     }
-    // FOV kick
-    if (this._fovKick > 0.001 && !this.reducedMotion) {
-      this._fovKick *= (1 - dt * 9);
-      this.engine.camera.fov = this._baseFov + this._fovKick * 5;
-      this.engine.camera.updateProjectionMatrix();
-    } else if (this.engine.camera.fov !== this._baseFov) {
-      this._fovKick = 0;
-      this.engine.camera.fov = this._baseFov;
-      this.engine.camera.updateProjectionMatrix();
-    }
+    // FOV kick diteruskan ke Player (satu otoritas kamera)
+    this.fovKickVal = this._fovKick;
+    if (this._fovKick > 0.001) this._fovKick *= (1 - dt * 9);
+    else this._fovKick = 0;
     // Shake
     if (!this.reducedMotion) {
       if (this.shake.intensity > 0.001) {

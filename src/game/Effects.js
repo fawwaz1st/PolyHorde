@@ -38,8 +38,19 @@ export class Effects {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    // Soft-round sprite: buat canvas texture lingkaran lembut
+    const sc = document.createElement('canvas');
+    sc.width = sc.height = 32;
+    const ctx2 = sc.getContext('2d');
+    const grad = ctx2.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.6, 'rgba(255,255,255,0.5)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx2.fillStyle = grad;
+    ctx2.fillRect(0, 0, 32, 32);
+    const spriteTex = new THREE.CanvasTexture(sc);
     const mat = new THREE.PointsMaterial({
-      size: 0.14, vertexColors: true, transparent: true, opacity: 0.95,
+      size: 0.18, map: spriteTex, vertexColors: true, transparent: true, opacity: 0.95,
       blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
     });
     this.points = new THREE.Points(geo, mat);
@@ -125,6 +136,16 @@ export class Effects {
       this._emit(pos.x, pos.y + 0.3, pos.z, Math.cos(a) * s, Math.random() * 7, Math.sin(a) * s,
         i % 2 === 0 ? 0xff6600 : 0xffcc44, 0.5 + Math.random() * 0.3);
     }
+    // Shockwave ring: scale + fade
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.5, 1, 24),
+      new THREE.MeshBasicMaterial({ color: 0xffaa44, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.copy(pos);
+    ring.position.y = Math.max(0.05, pos.y - 0.3);
+    this.engine.scene.add(ring);
+    this._shockwaves.push({ mesh: ring, r: 0.5, maxR: radius * 1.5, life: 0.3 });
   }
 
   tracer(from, to, color) {
@@ -139,7 +160,7 @@ export class Effects {
     const heal = { grunt: 5, shooter: 8, heavy: 25, bomber: 12, boss: 50 }[type] ?? 5;
     const s = this._shardPool.find(x => !x.active);
     if (!s) return;
-    s.active = true; s.life = 6; s.heal = heal;
+    s.active = true; s.life = 9; s.heal = heal;
     s.mesh.position.copy(pos);
     s.mesh.position.y = 0.6;
     s.mesh.visible = true;
@@ -154,9 +175,11 @@ export class Effects {
       const dy = player.position.y - s.mesh.position.y;
       const dz = player.position.z - s.mesh.position.z;
       const d2 = dx * dx + dy * dy + dz * dz;
-      if (d2 < 16) {
+      const magnetR = 6;
+      if (d2 < magnetR * magnetR) {
         const d = Math.sqrt(d2) || 1;
-        const pull = (1 - d / 4) * 12 * dt;
+        const t = 1 - d / magnetR;
+        const pull = t * t * (3 - 2 * t) * 14 * dt;
         s.mesh.position.x += (dx / d) * pull;
         s.mesh.position.y += (dy / d) * pull;
         s.mesh.position.z += (dz / d) * pull;
@@ -190,8 +213,9 @@ export class Effects {
     for (let i = 0; i < this.count; i++) {
       if (!this._alive[i]) continue;
       const i3 = i * 3, w3 = write * 3;
+      this._vel[i3 + 1] -= 9 * dt;
       p[i3] += this._vel[i3] * dt;
-      p[i3 + 1] += (this._vel[i3 + 1] - 9) * dt;
+      p[i3 + 1] += this._vel[i3 + 1] * dt;
       p[i3 + 2] += this._vel[i3 + 2] * dt;
       this._life[i] -= dt;
       if (this._life[i] <= 0) { this._alive[i] = 0; continue; }
@@ -207,6 +231,17 @@ export class Effects {
     this.points.geometry.setDrawRange(0, write);
     this.points.geometry.attributes.position.needsUpdate = true;
     this.points.geometry.attributes.color.needsUpdate = true;
+
+    // Shockwave update
+    if (!this._shockwaves) this._shockwaves = [];
+    for (let i = this._shockwaves.length - 1; i >= 0; i--) {
+      const s = this._shockwaves[i];
+      s.r += dt * 8;
+      s.life -= dt;
+      s.mesh.scale.setScalar(s.r);
+      s.mesh.material.opacity = Math.max(0, s.life / 0.3) * 0.7;
+      if (s.life <= 0) { this.engine.scene.remove(s.mesh); s.mesh.geometry.dispose(); s.mesh.material.dispose(); this._shockwaves.splice(i, 1); }
+    }
 
     // Decal fade
     for (let i = this._decals.length - 1; i >= 0; i--) {

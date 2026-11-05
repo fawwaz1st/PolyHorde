@@ -14,6 +14,7 @@ export class Weapons {
     this.player = player;
     this.audio = audio;
     this.effects = effects;
+    this.game = null; // di-set Game (untuk upgrades)
     this.list = Object.keys(WEAPONS);
     this.idx = 0;
     this.state = {};
@@ -102,6 +103,8 @@ export class Weapons {
 
   _fire(w, game) {
     this.audio.shoot(this.list[this.idx]);
+    this.player.justFired = true;
+    this.player._justFiredT = 0.3;
     this.player.addRecoil(w.recoil);
     game.shake.add(w.recoil * 1.6);
     game.fovKick(w.projectile ? 0.6 : w.pellets > 1 ? 0.3 : 0.12);
@@ -128,11 +131,14 @@ export class Weapons {
       this._ray.set(this.player.position, this._dir);
       this._ray.far = 80;
 
-      this._targets.length = 0;
-      const ml = game.enemies.list;
-      for (let i = 0; i < ml.length; i++) this._targets.push(ml[i].group);
-      const wl = game.world.props;
-      for (let i = 0; i < wl.length; i++) this._targets.push(wl[i].mesh);
+      if (this._targetsVersion !== game.enemies.list.length) {
+        this._targets.length = 0;
+        const ml = game.enemies.list;
+        for (let i = 0; i < ml.length; i++) this._targets.push(ml[i].group);
+        const wl = game.world.props;
+        for (let i = 0; i < wl.length; i++) this._targets.push(wl[i].mesh);
+        this._targetsVersion = game.enemies.list.length;
+      }
 
       const hits = this._ray.intersectObjects(this._targets, true);
       if (hits.length > 0) {
@@ -140,7 +146,13 @@ export class Weapons {
         let obj = h.object;
         while (obj && !obj.userData.enemy && obj.parent) obj = obj.parent;
         if (obj?.userData.enemy) {
-          obj.userData.enemy.damage(w.damage * (this.game?.upgrades?.damage || 1), w.kb, this._dir);
+          const enemy = obj.userData.enemy;
+          const hitHead = h.point.y > enemy.pos.y + enemy.def.height * 0.55;
+          const dist = h.distance;
+          const falloff = dist > 25 ? Math.max(0.7, 1 - (dist - 25) / 35 * 0.3) : 1;
+          const dmg = w.damage * (this.game?.upgrades?.damage || 1) * falloff * (hitHead ? 1.5 : 1);
+          enemy.damage(dmg, w.kb, this._dir);
+          if (hitHead) this.effects.damageNumber(h.point, Math.round(dmg), 'crit');
           this.effects.impact(h.point, w.color);
           this.audio.hit(h.point);
           game.ui?.setHitMarker(true);

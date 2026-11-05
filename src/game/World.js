@@ -91,6 +91,34 @@ export class World {
       const radius = kind === 'pillar' ? 0.7 : kind === 'crystal' ? 0.9 : 0.8;
       this.props.push({ mesh, x, z, radius: radius + 0.4 });
     });
+    // Pohon low-poly (konus + batang) — siluet vertikal
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 + 0.6;
+      const r = 8 + (i % 4) * 2.5;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      const g = new THREE.Group();
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 1.2, 5), new THREE.MeshStandardMaterial({ color: 0x4a3a2a, roughness: 0.9, flatShading: true }));
+      trunk.position.y = 0.6; trunk.castShadow = true; g.add(trunk);
+      const top = new THREE.Mesh(new THREE.ConeGeometry(0.8, 1.6, 6), new THREE.MeshStandardMaterial({ color: 0x2a5a3a, roughness: 0.8, flatShading: true }));
+      top.position.y = 1.9; top.castShadow = true; g.add(top);
+      g.position.set(x, 0, z);
+      g.rotation.y = i;
+      this.scene.add(g);
+      this.props.push({ mesh: g, x, z, radius: 0.6 });
+    }
+    // Batu low-poly
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 1.2;
+      const r = 5 + (i % 3) * 4;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.5 + (i % 3) * 0.2, 0),
+        new THREE.MeshStandardMaterial({ color: 0x4a4a5a, roughness: 0.9, flatShading: true }));
+      rock.position.set(x, 0.4, z);
+      rock.rotation.set(i, i * 2, i * 0.5);
+      rock.castShadow = true; rock.receiveShadow = true;
+      this.scene.add(rock);
+      this.props.push({ mesh: rock, x, z, radius: 0.7 });
+    }
     // Crates destruktibel: dipecahkan -> drop shard HP / ammo
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2 + 0.8;

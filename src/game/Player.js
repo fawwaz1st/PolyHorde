@@ -54,9 +54,11 @@ export class Player {
     this.pos.set(0, 1, 0);
     this.vel.set(0, 0, 0);
     this.yaw = 0; this.pitch = 0;
-    this.hp = MAX_HP;
+    this.hp = this.maxHp;
     this.alive = true;
     this.dashT = 0; this.dashCd = 0;
+    this.dashCdMax = 2.2; // reset (Reflex draft tidak bocor lintas-run)
+    this.justFired = false; this._justFiredT = 0;
     this.shieldT = 0; this.shieldActive = false; this.shieldCd = 0;
     this.recoil.set(0, 0);
     this.shieldMesh.visible = false;
@@ -160,18 +162,22 @@ export class Player {
     this.recoil.x *= (1 - dt * 8);
     this.recoil.y *= (1 - dt * 8);
 
-    // --- Camera ---
+    // --- Camera (satu otoritas FOV) ---
     this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
     const spd = Math.hypot(this.vel.x, this.vel.z);
-    // FOV berdasarkan kecepatan (sprint 78->86)
+    // FOV = sprint + dash pitch-down (diperbarui di Game untuk kick)
     const fovTarget = 78 + Math.min(spd / 11, 1) * 8;
     if (!this._fovSmooth) this._fovSmooth = 78;
     this._fovSmooth += (fovTarget - this._fovSmooth) * dt * 6;
-    this.engine.camera.fov = this._fovSmooth;
+    // Kick dari tembakan/kill-cascade ditambahkan di sini (bukan ditimpa Game)
+    const kick = this.game?.fovKickVal || 0;
+    this.engine.camera.fov = this._fovSmooth + kick * 5;
     this.engine.camera.updateProjectionMatrix();
     // Strafe roll: miring saat strafing
     const strafe = this.vel.x * Math.cos(this.yaw) - this.vel.z * Math.sin(this.yaw);
-    const roll = Math.max(-0.03, Math.min(0.03, -strafe * 0.004));
+    this._roll = this._roll || 0;
+    this._roll += (Math.max(-0.045, Math.min(0.045, -strafe * 0.006)) - this._roll) * dt * 8;
+    const roll = this._roll;
     // Landing dip
     if (this.onGround && !this._wasGround) this._landDip = 0.12;
     if (this._landDip > 0.001) this._landDip *= (1 - dt * 8); else this._landDip = 0;
