@@ -109,6 +109,9 @@ export class Enemies {
   }
 
   update(dt, player, game) {
+    // Attack Token: maks 3 melee menyerang serentak (fairness, riset 2026)
+    let meleeTokens = 3;
+    for (const x of this.list) if (x.alive && x._attacking) meleeTokens--;
     // Iterate mundur (explode memodifikasi list)
     for (let i = this.list.length - 1; i >= 0; i--) {
       const e = this.list[i];
@@ -128,13 +131,27 @@ export class Enemies {
       e._lastX = e.pos.x; e._lastZ = e.pos.z;
       const sway = Math.sin(t * 3) * 0.02 * (1 - Math.min(moving * 8, 1));
       e.group.scale.set(1 - sway * 0.5, 1 + sway, 1 - sway * 0.5);
+      // Animasi kaki: langkah maju-mundur berdasarkan gerak
+      const legL = e.group.userData.legL, legR = e.group.userData.legR;
+      if (legL && legR) {
+        const step = Math.sin(t * 8) * 0.4 * Math.min(moving * 10, 1);
+        legL.rotation.x = step;
+        legR.rotation.x = -step;
+      }
 
-      this._ai(e, dt, player, game);
+      // Token: hanya melee yang mendapat token yang menyerang
+      const wasAttacking = e._attacking;
+      e._attacking = false;
+      if (def.type === 'melee' && dist <= def.attackRange + 0.5 && meleeTokens > 0) {
+        meleeTokens--; e._attacking = true;
+      }
+      this._ai(e, dt, player, game, e._attacking);
+      if (wasAttacking && !e._attacking) { /* berhenti menyerang */ }
     }
     this._updateProjectiles(dt, player, game);
   }
 
-  _ai(e, dt, player, game) {
+  _ai(e, dt, player, game, hasToken = true) {
     const def = e.def;
     const dx = player.position.x - e.pos.x;
     const dz = player.position.z - e.pos.z;
@@ -171,10 +188,14 @@ export class Enemies {
         if (dist > def.attackRange) {
           e.pos.x += nx * e.speed * dt;
           e.pos.z += nz * e.speed * dt;
-        } else if (e.attackCd <= 0) {
+        } else if (e.attackCd <= 0 && hasToken) {
           player.takeDamage(def.damage);
           game.hurtPlayer(e.pos);
           e.attackCd = def.attackCd;
+        } else if (e.attackCd <= 0 && !hasToken) {
+          // Menunggu token: tetap di range tapi tidak menyerang
+          e.pos.x += nx * e.speed * 0.3 * dt;
+          e.pos.z += nz * e.speed * 0.3 * dt;
         }
         break;
       }

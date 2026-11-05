@@ -92,6 +92,29 @@ export function buildEnemyModel(type, def) {
   strip.position.set(0, def.height * 0.6, 0);
   group.add(strip);
 
+  // Kaki (2) — dianimasikan saat berjalan
+  if (type !== 'bomber') {
+    const legGeo = geo('enemy_leg', () => new THREE.BoxGeometry(def.size * 0.35, def.height * 0.45, def.size * 0.35));
+    const legMat = stylized(0x2a2a3a, { roughness: 0.85 });
+    const legL = new THREE.Mesh(legGeo, legMat);
+    legL.position.set(-def.size * 0.35, -def.height * 0.28, 0);
+    const legR = new THREE.Mesh(legGeo, legMat);
+    legR.position.set(def.size * 0.35, -def.height * 0.28, 0);
+    group.add(legL, legR);
+    group.userData.legL = legL;
+    group.userData.legR = legR;
+  }
+
+  // Armor plate di dada (bukan bomber)
+  if (type === 'heavy' || type === 'boss') {
+    const plate = new THREE.Mesh(
+      geo('enemy_plate', () => new THREE.BoxGeometry(def.size * 1.1, def.height * 0.4, 0.12)),
+      stylized(0x3a3a4a, { roughness: 0.5, metalness: 0.5 })
+    );
+    plate.position.set(0, def.height * 0.15, def.size * 0.7);
+    group.add(plate);
+  }
+
   return group;
 }
 

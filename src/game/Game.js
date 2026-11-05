@@ -76,7 +76,10 @@ export class Game {
       this.effects.damageNumber(d.pos, val, 'kill');
       this.hitStop(0.04);
       // Shard HP untuk kill dekat (< 8 m) — ekonomi agresi
-      if (d.pos.distanceTo(this.player.position) < 8) this.effects.shard(d.pos, d.type);
+      if (d.pos.distanceTo(this.player.position) < 8) {
+        this.effects.shard(d.pos, d.type);
+        this.ui.showHint('Shard hijau = HP. Dekati musuh untuk mengisi darah.');
+      }
       // Kill-cascade: 3+ kill dalam 1,5 detik -> domino ledakan berantai
       const now = performance.now() / 1000;
       this._killWindow = (this._killWindow || []).filter(t => now - t < 1.5);
@@ -116,6 +119,7 @@ export class Game {
     this.state = STATE.PLAYING;
     this.score = 0; this.kills = 0; this.wave = 1;
     this.combo = 0; this.comboTier = 0; this.comboTimer = 0;
+    this._feverHinted = false;
     this.spawnQueue = [];
     this.rockets.forEach(r => this.engine.scene.remove(r.mesh));
     this.rockets = [];
@@ -259,6 +263,7 @@ export class Game {
       if (this.comboTimer <= 0) { this.combo = 0; this.comboTier = 0; }
     }
     this.comboTier = this.combo >= 30 ? 3 : this.combo >= 15 ? 2 : this.combo >= 5 ? 1 : 0;
+    if (this.comboTier === 1 && !this._feverHinted) { this._feverHinted = true; this.ui.showHint('FEVER I — skor x1,5. Combo 15 = x2.'); }
 
     // Tabrakan musuh -> damage
     if (!this.player.shieldActive) {
@@ -352,6 +357,8 @@ export class Game {
     }
     if (this.waveCooldown > 0) {
       this.waveCooldown -= dt;
+      // Hitung mundur wave di objective
+      if (this._waveIncoming) this.objective = 'Wave ' + this._nextWave + ' dalam ' + Math.ceil(this.waveCooldown) + '...';
       if (this.waveCooldown <= 0 && this._waveIncoming) {
         this._waveIncoming = false;
         this.wave = this._nextWave;
@@ -366,6 +373,7 @@ export class Game {
       this.waveCooldown = 3.2;
       this.objective = 'Wave ' + this._nextWave + ' sebentar lagi...';
       this.ui.announce('WAVE ' + this._nextWave, '— ' + this.enemies.waveSize(this._nextWave) + ' musuh —', true);
+      this.ui.showHint('Ring merah = musuh akan muncul di sini.');
       this.audio.waveClear();
       this.score += this.wave * 50;
       this.grenades = 3;
