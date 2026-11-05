@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/v4-menu.png" alt="PolyHorde — menu utama" width="640">
+  <img src="docs/v5-menu.png" alt="PolyHorde — menu utama" width="640">
 </p>
 <p align="center">
-  <img src="docs/v4-gameplay.png" alt="PolyHorde — pertarungan wave" width="640">
+  <img src="docs/v5-gameplay.png" alt="PolyHorde — pertarungan wave" width="640">
 </p>
 
 # PolyHorde
