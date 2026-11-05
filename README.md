@@ -37,7 +37,9 @@ High score disimpan di localStorage (`polyHordeHigh`).
 - Settings di pause overlay: sensitivitas mouse, volume musik, mute, reduced motion.
 - Reduced motion: mematikan shake, FOV punch, weapon bob; CSS pulse/sweep juga dimatikan.
 - Micro-hint kontekstual JIT: toast 2,6 detik pada shard/telegraph/FEVER pertama per run.
-- Audio spatial-ish: StereoPanner untuk bomber beep & spawn tick (telinga jadi sensor arah).
+- Audio spatial-ish: StereoPanner untuk bomber beep, spawn tick, ledakan & hit pemain (telinga jadi sensor arah).
+- Setting persisten di localStorage (`polyHordeSettings`); reduced-motion mengikuti `prefers-reduced-motion` OS.
+- Radar colorblind-safe: bentuk/ukuran beda per tipe + penanda arah pemain.
 - Boss wave tiap kelipatan 5 (elite heavy, HP 3x, charge mematikan, shard 50 HP).
 - Kill-cascade: 3+ kill dalam 1,5 detik memicu domino ledakan berantai (maks 8) + time-scale 0,35x.
 
