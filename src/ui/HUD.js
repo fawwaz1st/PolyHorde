@@ -385,11 +385,10 @@ export class HUD {
     this._fireBloom *= (1 - dt * 12);
     if (this._fireBloom < 0.001) this._fireBloom = 0;
     const spread = (wdef ? wdef.spread : 0.02) * 150 + this._fireBloom * 100;
-    const size = Math.round(24 + spread);
-    if (this._last.cross !== size) {
-      this.el.crosshair.style.width = size + 'px';
-      this.el.crosshair.style.height = size + 'px';
-      this._last.cross = size;
+    const gap = Math.round(6 + spread * 0.5);
+    if (this._last.cross !== gap) {
+      this.el.crosshair.style.setProperty('--gap', gap + 'px');
+      this._last.cross = gap;
     }
 
     // Weapon slots
@@ -444,9 +443,10 @@ export class HUD {
     if (feverTier !== (this._last.feverTier ?? 0)) {
       if (feverTier === 1) this.showHint('fever1', 'FEVER I — skor x1.5. Combo 15 = x2 + tembak cepat.');
       if (feverTier > 0 && this.el.fever) {
-        this.el.fever.textContent = '';
+        const labels = ['', 'FEVER I', 'FEVER II', 'FURY'];
+        this.el.fever.textContent = labels[feverTier];
         this.el.fever.className = 'fever tier' + feverTier;
-        this.el.fever.style.opacity = 0; // chip combo sudah menampung info fever
+        this.el.fever.style.opacity = 1;
       } else if (this.el.fever) {
         this.el.fever.style.opacity = 0;
       }

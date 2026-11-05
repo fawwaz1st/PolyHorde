@@ -37,11 +37,13 @@ export class Game {
       powerPreference: 'high-performance'
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    // Bloom aktif → scene RT HalfFloat pada drawing-buffer size (dpr ikut) = ~51MB @dpr 1.75; cap dpr 1.5 saat bloom
-    const bloomDprCap = this.renderPipeline ? 1.5 : 1.75;
-    this.renderer.setPixelRatio(Math.min(dpr, isMobileUA ? 1.25 : (lowEnd ? 1.25 : bloomDprCap)));
+    // Bloom aktif → scene RT HalfFloat pada drawing-buffer size (dpr ikut); cap 1.5 (dulu evaluasi sebelum renderPipeline ada -> selalu 1.75)
+    this.renderer.setPixelRatio(Math.min(dpr, isMobileUA ? 1.25 : (lowEnd ? 1.25 : 1.5)));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // Shadow statis: semua caster tidak bergerak (musuh castShadow=false) -> render sekali
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     document.body.prepend(this.renderer.domElement);
@@ -135,6 +137,8 @@ export class Game {
       this.audio.playWaveClear();
       this.score += this.wave * 50;
       this.hud.announceClear();
+      // Resupply grenade tiap wave clear (resource tidak mati)
+      this.abilitySystem.resupplyGrenades();
     });
 
     // State callbacks
@@ -183,8 +187,9 @@ export class Game {
           const bloomPass = bloom(scenePass, 0.55, 0.4, 0.72);
           const outputNode = sceneColor.add(bloomPass);
           this.renderPipeline = new THREE.RenderPipeline(this.renderer, outputNode);
-          if (typeof this.renderPipeline.setResolutionScale === 'function') this.renderPipeline.setResolutionScale(0.35);
-          else if (bloomPass && typeof bloomPass.setResolutionScale === 'function') bloomPass.setResolutionScale(0.35);
+          // Bloom chain res scale 0.35 (VRAM -55%); scene pass 0.8 (fragment -36%)
+          if (typeof bloomPass.setResolutionScale === 'function') bloomPass.setResolutionScale(0.35);
+          if (typeof scenePass.setResolutionScale === 'function') scenePass.setResolutionScale(0.8);
         } catch (e) {
           console.warn('Bloom pipeline tidak tersedia, lanjut tanpa post-processing:', e);
         }
@@ -287,7 +292,8 @@ export class Game {
     }
 
     // Bloom pipeline render; skip saat PAUSED (baterai) — kecuali first frame
-    if (this.state === 3) return; // PAUSED: jangan render tiap frame
+    // Skip render saat PAUSED / GAME_OVER / MENU (overlay menutupi layar) — hemat GPU
+    if (this.state === 3 || this.state === 2) return;
     if (this.renderPipeline) this.renderPipeline.render();
     else this.renderer.render(this.scene, this.camera);
   }
@@ -352,8 +358,15 @@ export class Game {
       else l.setPosition(p.x, p.y, p.z);
       if (l.forwardX) { l.forwardX.value = -Math.sin(this.player.yaw); l.forwardY.value = 0; l.forwardZ.value = -Math.cos(this.player.yaw); }
       else if (l.setOrientation) l.setOrientation(-Math.sin(this.player.yaw), 0, -Math.cos(this.player.yaw), 0, 1, 0);
-      this.audio._listenerPos = { x: p.x, y: p.y, z: p.z };
+      if (!this._listenerPosVec) this._listenerPosVec = { x: p.x, y: p.y, z: p.z };
+      this._listenerPosVec.x = p.x; this._listenerPosVec.y = p.y; this._listenerPosVec.z = p.z;
+      this.audio._listenerPos = this._listenerPosVec;
       this.audio._listenerYaw = this.player.yaw;
+    }
+    // Low-HP warning: detak audio saat HP < 25%
+    if (this.player.hp < this.player.maxHp * 0.25 && this.player.hp > 0) {
+      this._lowHpT = (this._lowHpT || 0) - dt;
+      if (this._lowHpT <= 0) { this._lowHpT = 1.2; this.audio.playLowHpWarning(); }
     }
     // Musik adaptif: intensity naik dengan jumlah musuh hidup + tekanan HP
     const alive = this.enemyManager.aliveEnemies.length;
@@ -480,6 +493,7 @@ export class Game {
   // Restart instan — semua sistem sudah punya reset(), tak perlu location.reload()
   restart() {
     this.hud.hideGameOver();
+    this.hud.hidePause(); // bug: overlay pause menempel permanen + blur tiap frame
     this.hud.resetCombo();
     this.hitStop(0);
     this._hitStopT = 0;
@@ -500,9 +514,12 @@ export class Game {
     this.hud.announceIncoming(this.wave);
     this.audio.playWaveGrowl();
     this.music.start();
-    this.story.reset();
-    this.story.playIntro();
-    document.body.requestPointerLock();
+    this.comboTier = 0;
+    // Retry instan: intro hanya sekali per sesi (sama seperti start())
+    if (!this._introShown) { this._introShown = true; this.story.reset(); this.story.playIntro(); }
+    else { this.story.reset(); this.story.setObjective('Bertahan. Combo 5 = FEVER x1,5.'); }
+    const p = document.body.requestPointerLock();
+    if (p && typeof p.catch === 'function') p.catch(() => { this.hud.showPause(); });
   }
 
   start() {
@@ -516,6 +533,7 @@ export class Game {
     this.kills = 0;
     this.waveCooldown = 2.0;
     this._waveIncoming = true;
+    this.comboTier = 0;
     this.player.reset();
     this.enemyManager.reset();
     this.weaponSystem.reset();

@@ -59,8 +59,8 @@ export class Audio {
       const dx = pos.x - this._listenerPos.x;
       const dz = pos.z - this._listenerPos.z;
       // project ke sumbu kanan kamera
-      const rightX = -Math.sin(this._listenerYaw);
-      const rightZ = -Math.cos(this._listenerYaw);
+      const rightX = Math.cos(this._listenerYaw);
+      const rightZ = -Math.sin(this._listenerYaw);
       const len = Math.hypot(dx, dz) || 1;
       p.pan.value = Math.max(-1, Math.min(1, (dx * rightX + dz * rightZ) / len));
     }
@@ -98,7 +98,7 @@ export class Audio {
     src.connect(hp).connect(n.gainNode);
     src.start(t);
     src.stop(t + 0.04);
-    src.onended = () => { try { src.disconnect(); hp.disconnect(); } catch {} };
+    src.onended = () => { try { src.disconnect(); hp.disconnect(); n.gainNode.disconnect(); } catch {} };
   }
 
   playReload() {
@@ -125,7 +125,7 @@ export class Audio {
     src.connect(filter).connect(n.gainNode);
     src.start(t);
     src.stop(t + 0.05);
-    src.onended = () => { try { src.disconnect(); filter.disconnect(); } catch {} };
+    src.onended = () => { try { src.disconnect(); filter.disconnect(); n.gainNode.disconnect(); } catch {} };
     // Armor-ping layer: metallic ringing partials
     this._tone('triangle', 2400 + Math.random() * 600, 1800, t, 0.09, 0.045);
   }
@@ -161,6 +161,7 @@ export class Audio {
     osc.connect(lp).connect(g).connect(this._out());
     osc.start(t); lfo.start(t);
     osc.stop(t + 1.6); lfo.stop(t + 1.6);
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); lfo.disconnect(); lfoGain.disconnect(); lp.disconnect(); } catch {} };
     // Radar blip di atasnya
     for (let i = 0; i < 3; i++) {
       this._tone('sine', 880, 880, t + 0.15 + i * 0.4, 0.08, 0.035);
@@ -228,21 +229,22 @@ export class Audio {
     this._tone('sawtooth', 400, 40, this.ctx.currentTime, 0.5, 0.25);
   }
 
-  playExplosion() {
+  playExplosion(pos) {
     if (!this.enabled) return;
     this._ensureResumed();
     const t = this.ctx.currentTime;
     const n = this._noise(0.35, 0.45);
+    const panNode = this._pan(pos, this._out());
     const src = this.ctx.createBufferSource();
     src.buffer = n.buffer;
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(800, t);
     filter.frequency.exponentialRampToValueAtTime(50, t + 0.3);
-    src.connect(filter).connect(n.gainNode);
+    src.connect(filter).connect(panNode);
     src.start(t);
     src.stop(t + 0.35);
-    src.onended = () => { try { src.disconnect(); filter.disconnect(); } catch {} };
+    src.onended = () => { try { src.disconnect(); filter.disconnect(); panNode.disconnect(); n.gainNode.disconnect(); } catch {} };
     // Sub thump
     this._tone('sine', 120, 30, t, 0.25, 0.3);
   }
@@ -259,10 +261,30 @@ export class Audio {
     this._tone('sine', 400, 1200, this.ctx.currentTime, 0.3, 0.1);
   }
 
-  playPlayerHit() {
+  playPlayerHit(pos) {
     if (!this.enabled) return;
     this._ensureResumed();
-    this._tone('sine', 200, 60, this.ctx.currentTime, 0.2, 0.15);
+    const t = this.ctx.currentTime;
+    const panNode = this._pan(pos, this._out());
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(200, t);
+    osc.frequency.exponentialRampToValueAtTime(60, t + 0.15);
+    g.gain.setValueAtTime(0.15, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    osc.connect(g).connect(panNode);
+    osc.start(t); osc.stop(t + 0.2);
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); panNode.disconnect(); } catch {} };
+  }
+
+  // Low-HP warning: detak cepat saat HP < 25%
+  playLowHpWarning() {
+    if (!this.enabled) return;
+    this._ensureResumed();
+    const t = this.ctx.currentTime;
+    this._tone('sine', 90, 60, t, 0.1, 0.08);
+    this._tone('sine', 90, 60, t + 0.18, 0.1, 0.06);
   }
 }
 
@@ -336,6 +358,8 @@ export class Music {
     this._updateGains();
     const ctx = this.ctx;
     const lookahead = 0.25;
+    // Clamp: setelah stall (tab background), jangan jadwalkan semua bar telat sekaligus
+    if (this._nextNoteTime < ctx.currentTime - 0.05) this._nextNoteTime = ctx.currentTime;
     while (this._nextNoteTime < ctx.currentTime + lookahead) {
       this._playBar(this._nextNoteTime);
       this._nextNoteTime += 0.5;

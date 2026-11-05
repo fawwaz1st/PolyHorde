@@ -126,12 +126,13 @@
       z-index: 11; pointer-events: none;
       width: 24px; height: 24px;
     }
+    #crosshair { --gap: 6px; }
     #crosshair::before, #crosshair::after {
       content: ''; position: absolute; background: rgba(255,255,255,0.8);
       transition: all 0.06s linear;
     }
-    #crosshair::before { width: 2px; height: 10px; top: 2px; left: calc(50% - 1px); }
-    #crosshair::after { width: 10px; height: 2px; top: calc(50% - 1px); left: 2px; }
+    #crosshair::before { width: 2px; height: 10px; top: calc(50% - 5px - var(--gap)); left: calc(50% - 1px); }
+    #crosshair::after { width: 10px; height: 2px; top: calc(50% - 1px); left: calc(50% - 5px - var(--gap)); }
     #crosshair.hit { opacity: 0; }
     #crosshair-hit {
       position: fixed; top: 50%; left: 50%;
@@ -329,6 +330,7 @@
       <div class="title">POLY-HORDE</div>
       <div class="subtitle">— Low-Poly Arena FPS —</div>
       <div class="click-msg">[ KLIK UNTUK MAIN ]</div>
+      <div id="menu-settings" style="margin-top:1rem;font-size:0.75rem;opacity:0.5;cursor:pointer">[ ⚙ Settings ]</div>
       <div id="menu-high" class="menu-high" style="display:none"></div>
       <div class="controls-info">
         WASD — Gerak | Mouse — Lihat | Klik Kiri — Tembak<br>
@@ -396,7 +398,7 @@
   <!-- Narrative overlay (story mode) -->
   <div id="narrative">
     <div id="narrative-text"></div>
-    <div id="narrative-skip">[ klik untuk lanjut ]</div>
+    <div id="narrative-skip">[ Space / Enter untuk lanjut ]</div>
   </div>
 
   <!-- Objective -->

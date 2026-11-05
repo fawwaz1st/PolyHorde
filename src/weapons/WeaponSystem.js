@@ -226,7 +226,7 @@ export class WeaponSystem {
           this.audio.playHit();
           // Hit confirm flash via timer
           this._crosshairHit?.classList.add('show');
-          this._hitFlashT = 0.09;
+          this._hitFlashT = 0.18;
         }
       } else {
         const end = this._tmp.copy(this.player.position).addScaledVector(this._dir, 50);

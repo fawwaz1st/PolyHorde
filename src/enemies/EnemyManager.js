@@ -164,7 +164,12 @@ export class EnemyManager {
     this._tickAccum -= dt;
     const tickNow = this._tickAccum <= 0;
     if (tickNow) this._tickAccum = 0.22;
-    if (tickNow && this._telegraphs.length > 0) this.audio.playSpawnTick(this._telegraphs[0].mesh.position); // sekali per tick, bukan per telegraf
+    // Spawn tick: throttle — hanya 1× per 0.5 dtk (dulu tiap 0.22 dtk menutupi beep bomber)
+    this._spawnTickT = (this._spawnTickT || 0) - dt;
+    if (tickNow && this._telegraphs.length > 0 && this._spawnTickT <= 0) {
+      this._spawnTickT = 0.5;
+      this.audio.playSpawnTick(this._telegraphs[0].mesh.position);
+    }
     for (let i = this._telegraphs.length - 1; i >= 0; i--) {
       const tg = this._telegraphs[i];
       tg.t += dt;
@@ -192,8 +197,9 @@ export class EnemyManager {
       this._hash.insert(i, e.mesh.position.x, e.mesh.position.z, e);
     }
 
+    // Iterate mundur: _explodeEnemy men-swap-pop this.enemies saat loop -> hindari skip
     const enemies = this.enemies;
-    for (let i = 0; i < enemies.length; i++) {
+    for (let i = enemies.length - 1; i >= 0; i--) {
       const enemy = enemies[i];
       if (!enemy.alive) continue;
       // Hit-flash reset tanpa setTimeout (riset 2026: timer-based, bukan event DOM)
@@ -421,7 +427,7 @@ export class EnemyManager {
         } else if (enemy.attackTimer <= 0) {
           player.takeDamage(enemy.damage);
           enemy.attackTimer = enemy.attackCooldown;
-          this.audio.playPlayerHit();
+          this.audio.playPlayerHit(enemy.mesh.position);
           this.game.hud?.flashDamageFrom(enemy.mesh.position);
         }
         break;
@@ -484,7 +490,7 @@ export class EnemyManager {
       if (!m.position || m.isInstancedMesh) continue;
       const dx = m.position.x - pos.x, dz = m.position.z - pos.z;
       const d = Math.sqrt(dx * dx + dz * dz);
-      if (d < bestD && d > 0.5) { bestD = d; if (!best) best = new THREE.Vector3(); best.set(-dx / d, 0, -dz / d); }
+      if (d < bestD && d > 0.5) { bestD = d; if (!this._coverVec) this._coverVec = new THREE.Vector3(); best = this._coverVec.set(-dx / d, 0, -dz / d); }
     }
     return best;
   }

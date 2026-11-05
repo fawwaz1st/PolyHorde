@@ -22,9 +22,9 @@ export class Arena {
     this._obstacles();
     this._floorMarkings();
 
-    // Build octree
+    // Build octree — InstancedMesh & noCollide di-skip (dinding = boundary radius Player._collide)
     for (const mesh of this.meshes) {
-      if (mesh.userData.noCollide) continue;
+      if (mesh.isInstancedMesh || mesh.userData.noCollide) continue;
       this.octree.fromGraphNode(mesh);
     }
   }

@@ -68,6 +68,12 @@ export class AbilitySystem {
     this._grenades.length = 0;
   }
 
+  resupplyGrenades() {
+    this.abilities.grenade.count = 3;
+    this.abilities.grenade.ready = true;
+    this.abilities.grenade.cd = 0;
+  }
+
   getAbilityState(name) {
     const a = this.abilities[name];
     if (!a) return { ready: false, cd: 0, maxCd: 1, active: false };
@@ -95,7 +101,7 @@ export class AbilitySystem {
 
     // Dash
     if (input.justDown('KeyQ') && this.abilities.dash.ready && !this.player.isDashing) {
-      this._activateDash();
+      this._activateDash(input);
     }
 
     // Trail partikel kontinu selama dash — bukan sekali di awal saja
@@ -119,8 +125,7 @@ export class AbilitySystem {
         this.player.shieldActive = false;
         this.shieldMesh.visible = false;
         this.abilities.shield.active = false;
-        this.abilities.shield.ready = false;
-        this.abilities.shield.cd = this.abilities.shield.maxCd;
+        // cd sudah berjalan sejak aktivasi — jangan reset ulang
       }
     }
 
@@ -135,13 +140,26 @@ export class AbilitySystem {
     }
   }
 
-  _activateDash() {
+  _activateDash(input) {
     this.audio.playDash();
     this.abilities.dash.ready = false;
     this.abilities.dash.cd = this.abilities.dash.maxCd;
 
+    // Dash mengikuti arah GERAK (bukan selalu ke depan kamera) — lari mundur = dash mundur
     const dir = this._dir.set(0, 0, -1);
-    dir.applyQuaternion(this.player.camera.quaternion);
+    const fwd = input.isDown('KeyW'), back = input.isDown('KeyS'), left = input.isDown('KeyA'), right = input.isDown('KeyD');
+    if (fwd || back || left || right) {
+      const yaw = this.player.yaw;
+      const sy = Math.sin(yaw), cy = Math.cos(yaw);
+      // forward = (-sin yaw, 0, -cos yaw); right = (cos yaw, 0, -sin yaw)
+      const fx = -sy, fz = -cy;
+      const rx = cy, rz = -sy;
+      dir.set(fx * (fwd ? 1 : 0) - fx * (back ? 1 : 0) + rx * (right ? 1 : 0) - rx * (left ? 1 : 0), 0,
+               fz * (fwd ? 1 : 0) - fz * (back ? 1 : 0) + rz * (right ? 1 : 0) - rz * (left ? 1 : 0));
+    } else {
+      dir.set(0, 0, -1);
+      dir.applyQuaternion(this.player.camera.quaternion);
+    }
     dir.y = 0;
     if (dir.lengthSq() < 0.01) dir.z = -1;
     dir.normalize();
@@ -156,6 +174,7 @@ export class AbilitySystem {
     this.audio.playShield();
     this.abilities.shield.ready = false;
     this.abilities.shield.active = true;
+    this.abilities.shield.cd = this.abilities.shield.maxCd; // cooldown mulai saat aktivasi (total 8 dtk)
     this.player.shieldActive = true;
     this.player.shieldTimer = this.player.shieldDuration;
     this.shieldMesh.position.copy(this.player.position);

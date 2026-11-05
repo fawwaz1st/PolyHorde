@@ -88,8 +88,13 @@ export class Story {
     const line = this._queue.shift();
     if (this.el.text) this.el.text.textContent = line;
     if (this.el.narrative) this.el.narrative.classList.add('show');
-    // Pause world saat narrative tampil — JIT narrative tidak boleh menutupi gameplay yang berjalan
-    this.game.state = 3; // PAUSED
+    // Narasi antar-wave: jangan ambil alih state PAUSE saat pointer masih lock
+    // (klik = tembakan, overlay tak bisa diklik) — biarkan world idle, pemain tetap kendalikan
+    if (document.pointerLockElement) {
+      // pointer lock aktif: narasi non-blocking, world lanjut idle
+    } else {
+      this.game.state = 3;
+    }
   }
 
   _advance() {

@@ -18,7 +18,7 @@ function _createOutlineMesh(original, color, thickness) {
 // Material outline di-share global (dulu 1 material + geometry.clone() per mesh = boros draw/compile)
 let _sharedOutlineMat = null;
 function _outlineMaterial(color) {
-  if (!_sharedOutlineMat || _sharedOutlineMat.color.getHex() !== color) {
+  if (!_sharedOutlineMat) {
     _sharedOutlineMat = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
@@ -27,6 +27,8 @@ function _outlineMaterial(color) {
       polygonOffset: true,
       polygonOffsetFactor: -1,
     });
+  } else if (_sharedOutlineMat.color.getHex() !== color) {
+    _sharedOutlineMat.color.setHex(color);
   }
   return _sharedOutlineMat;
 }
