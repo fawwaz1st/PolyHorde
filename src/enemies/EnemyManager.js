@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { Events } from '../engine/EventBus.js';
 import { SpatialHash } from '../systems/SpatialHash.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const BASE_TYPES = {
   grunt: { hp: 30, speed: 4, damage: 10, collisionDamage: 8, score: 10, color: 0xff4444, size: 0.5, height: 1.2, attackRange: 1.5, attackCooldown: 1.0, attackType: 'melee' },
@@ -86,6 +87,12 @@ export class EnemyManager {
       });
     }
     this._eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    // Mata digabung jadi SATU geometry (2 draw -> 1 per musuh; 105 -> 70 total)
+    const eyeL = new THREE.SphereGeometry(0.08, 4, 4);
+    eyeL.translate(-0.15, 0, 0);
+    const eyeR = new THREE.SphereGeometry(0.08, 4, 4);
+    eyeR.translate(0.15, 0, 0);
+    this._eyeGeoMerged = mergeGeometries([eyeL, eyeR]);
 
     // Enemy projectile pool (pre-alloc)
     this.enemyProjectiles = [];
@@ -322,12 +329,10 @@ export class EnemyManager {
     mesh.receiveShadow = true;
 
     if (type !== 'bomber') {
-      const e1 = new THREE.Mesh(this._geoCache.eye, this._eyeMat);
-      e1.position.set(-0.15, def.height * 0.35, def.size * 0.8);
-      mesh.add(e1);
-      const e2 = new THREE.Mesh(this._geoCache.eye, this._eyeMat);
-      e2.position.set(0.15, def.height * 0.35, def.size * 0.8);
-      mesh.add(e2);
+      // Satu mesh mata (geometry merged) — hemat 1 draw call per musuh
+      const eyes = new THREE.Mesh(this._eyeGeoMerged, this._eyeMat);
+      eyes.position.set(0, def.height * 0.35, def.size * 0.8);
+      mesh.add(eyes);
     }
 
     this.scene.add(mesh);

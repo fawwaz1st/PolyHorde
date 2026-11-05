@@ -128,6 +128,10 @@ export class HUD {
       this.el.radar.appendChild(d);
       this._radarDots.push(d);
     }
+    // Penanda arah pemain (segitiga putih di tengah)
+    const playerMark = document.createElement('div');
+    playerMark.className = 'radar-player';
+    this.el.radar.appendChild(playerMark);
     // Ring radar jarak 3/6/9
     for (const r of [0.25, 0.5, 0.75]) {
       const ring = document.createElement('div');
@@ -146,19 +150,31 @@ export class HUD {
     const sin = Math.sin(-player.yaw);
     const cos = Math.cos(-player.yaw);
     let di = 0;
-    // Sort jarak: musuh terdekat WAJIB terlihat dulu (dulu bisa terselimuti 35 musuh)
+    // Radar buffer: pre-alokasi & reuse objek (bukan alokasi per tick)
     const enemies = enemyManager.aliveEnemies;
-    if (!this._radarBuf) this._radarBuf = [];
-    this._radarBuf.length = 0;
-    for (let i = 0; i < enemies.length; i++) {
+    if (!this._radarBuf) {
+      this._radarBuf = [];
+      for (let i = 0; i < 36; i++) this._radarBuf.push({ e: null, dx: 0, dz: 0, dist: 0 });
+    }
+    let n = 0;
+    for (let i = 0; i < enemies.length && n < 36; i++) {
       const e = enemies[i];
       const dx = e.mesh.position.x - player.position.x;
       const dz = e.mesh.position.z - player.position.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist <= RADAR_RANGE) this._radarBuf.push({ e, dx, dz, dist });
+      if (dist <= RADAR_RANGE) {
+        const slot = this._radarBuf[n++];
+        slot.e = e; slot.dx = dx; slot.dz = dz; slot.dist = dist;
+      }
     }
-    this._radarBuf.sort((a, b) => a.dist - b.dist);
-    for (let n = 0; n < this._radarBuf.length && di < RADAR_DOTS; n++) {
+    // Seleksi parsial 18 terdekat (bukan sort penuh 35)
+    const count = n;
+    for (let i = 0; i < Math.min(count, RADAR_DOTS); i++) {
+      let best = i;
+      for (let j = i + 1; j < count; j++) if (this._radarBuf[j].dist < this._radarBuf[best].dist) best = j;
+      if (best !== i) { const tmp = this._radarBuf[i]; this._radarBuf[i] = this._radarBuf[best]; this._radarBuf[best] = tmp; }
+    }
+    for (let n = 0; n < count && di < RADAR_DOTS; n++) {
       const { e, dx, dz } = this._radarBuf[n];
       // Rotasi ke frame pemain: forward = atas radar
       const rx = dx * cos - dz * sin;
@@ -171,7 +187,12 @@ export class HUD {
       dot.style.top = '50%';
       dot.style.transform = 'translate3d(' + (px - 50) + '%, ' + (py - 50) + '%, 0) translate(-50%, -50%)';
       dot.style.willChange = 'transform';
-      dot.style.background = e.type === 'bomber' ? '#4f4' : e.type === 'heavy' ? '#a6f' : '#f66';
+      // Colorblind-safe: bentuk & ukuran beda per tipe (bukan hanya warna)
+      dot.style.background = e.type === 'bomber' ? '#4f4' : e.type === 'heavy' ? '#a6f' : e.type === 'boss' ? '#fa0' : '#f66';
+      dot.style.width = e.type === 'heavy' || e.type === 'boss' ? '9px' : '6px';
+      dot.style.height = e.type === 'heavy' || e.type === 'boss' ? '9px' : '6px';
+      dot.style.border = e.type === 'bomber' ? '2px solid #4f4' : 'none';
+      dot.style.borderRadius = e.type === 'bomber' ? '50%' : '0';
     }
     // Telegraf aktif -> blip oranye berkedip (menghilangkan blind spot tension phase)
     const telegraphs = this.game?.enemyManager?._telegraphs;
@@ -454,14 +475,11 @@ export class HUD {
     }
     this.game.comboTier = feverTier;
 
-    // Low HP pulse
-    if (player.hp < player.maxHp * 0.25 && player.hp > 0) {
-      const pulse = Math.sin(performance.now() / 300) * 0.3 + 0.3;
-      this.el.damageOverlay.style.borderColor = 'rgba(255,0,0,' + pulse + ')';
-      this.el.damageOverlay.style.borderWidth = '12px';
-    } else if (!this.el.damageOverlay.classList.contains('hit')) {
-      this.el.damageOverlay.style.borderColor = 'transparent';
-      this.el.damageOverlay.style.borderWidth = '8px';
+    // Low HP pulse via CSS class (bukan style per frame — repaint tiap frame)
+    const lowHp = player.hp < player.maxHp * 0.25 && player.hp > 0;
+    if (lowHp !== this._last.lowHp) {
+      this.el.damageOverlay.classList.toggle('lowhp', lowHp);
+      this._last.lowHp = lowHp;
     }
 
     // Wave announcement fade

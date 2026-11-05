@@ -157,6 +157,8 @@
     body.reduced-motion #pause-overlay .pause-sub,
     body.reduced-motion #narrative-skip { animation: none; }
     body.reduced-motion #wave-announce { animation: none; }
+    body.reduced-motion #damage-overlay.lowhp { animation: none; }
+    body.reduced-motion #damage-overlay.lowhp { border-color: rgba(255,0,0,0.5); border-width: 10px; }
     @media (prefers-reduced-motion: reduce) {
       #radar::after { animation: none; }
       #blocker .click-msg, #pause-overlay .pause-sub, #narrative-skip { animation: none; }
@@ -181,6 +183,14 @@
       animation: radar-sweep 3s linear infinite;
     }
     @keyframes radar-sweep { to { transform: rotate(360deg); } }
+    .radar-player {
+      position: absolute; left: 50%; top: 50%; z-index: 3;
+      width: 0; height: 0;
+      border-left: 5px solid transparent;
+      border-right: 5px solid transparent;
+      border-bottom: 8px solid #fff;
+      transform: translate(-50%, -50%);
+    }
     .radar-ring {
       position: absolute; left: 50%; top: 50%; z-index: 0;
       transform: translate(-50%, -50%);
@@ -307,6 +317,15 @@
     #damage-overlay.hit {
       border-color: rgba(255,0,0,0.4);
     }
+    #damage-overlay.lowhp { animation: lowhp-pulse 0.9s ease-in-out infinite; }
+    @keyframes lowhp-pulse {
+      0%, 100% { border-color: rgba(255,0,0,0.25); border-width: 8px; }
+      50% { border-color: rgba(255,0,0,0.7); border-width: 12px; }
+    }
+    /* Damage arc: tanpa blur (raster cost) */
+    #damage-arc .arc { filter: none; }
+    /* Radar sweep pause saat game pause */
+    body.paused #radar::after { animation-play-state: paused; }
     /* Arc arah serangan: diputar sesuai azimuth penyerang — pemain tahu harus menghadap ke mana */
     #damage-arc {
       position: fixed; inset: 0; z-index: 9; pointer-events: none;

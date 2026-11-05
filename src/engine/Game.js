@@ -149,6 +149,7 @@ export class Game {
       if (this.state === STATES.PAUSED) {
         this.state = STATES.PLAYING;
         this.hud.hidePause();
+        document.body.classList.remove('paused');
         this.timer.reset();
         this.input.update(); // buang buffered Q/E/F/klik yang menumpuk saat pause
       }
@@ -158,6 +159,7 @@ export class Game {
       if (this.state === STATES.PLAYING) {
         this.state = STATES.PAUSED;
         this.hud.showPause();
+        document.body.classList.add('paused');
       }
     };
 
@@ -193,8 +195,19 @@ export class Game {
         } catch (e) {
           console.warn('Bloom pipeline tidak tersedia, lanjut tanpa post-processing:', e);
         }
-        // Warm-up: satu kali render pipeline di init (compile shader bloom di luar RAF)
-        if (this.renderPipeline) { try { this.renderPipeline.render(); } catch (e) { console.warn('pipeline warmup fail:', e); } }
+        // Warm-up: render pipeline + semua varian jumlah PointLight (anti shader recompile hitch)
+        try {
+          if (this.renderPipeline) this.renderPipeline.render();
+          for (let n = 1; n <= this._lightPool.length; n++) {
+            for (let i = 0; i < this._lightPool.length; i++) {
+              this._lightPool[i].light.visible = i < n;
+              this._lightPool[i].light.intensity = 0;
+            }
+            if (this.renderPipeline) this.renderPipeline.render();
+            else this.renderer.render(this.scene, this.camera);
+          }
+          for (const s of this._lightPool) { s.light.visible = false; s.light.intensity = 0; }
+        } catch (e) { console.warn('warmup fail:', e); }
         requestAnimationFrame(this._boundAnimate);
       })
       .catch((e) => {
@@ -482,6 +495,7 @@ export class Game {
   _gameOver() {
     if (this.state === STATES.GAME_OVER) return;
     this.state = STATES.GAME_OVER;
+    document.body.classList.remove('paused');
     document.exitPointerLock();
     this.audio.playDeath();
     this.music.stop();
