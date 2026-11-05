@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/v3-menu.png" alt="PolyHorde — menu utama" width="640">
+  <img src="docs/v4-menu.png" alt="PolyHorde — menu utama" width="640">
 </p>
 <p align="center">
-  <img src="docs/v3-gameplay.png" alt="PolyHorde — pertarungan wave" width="640">
+  <img src="docs/v4-gameplay.png" alt="PolyHorde — pertarungan wave" width="640">
 </p>
 
 # PolyHorde
@@ -39,7 +39,7 @@ WASD gerak, mouse lihat / tembak, Shift sprint, Space lompat, Q dash, E shield, 
 - 4 senjata dengan peran jelas: pistol presisi, AR penyapu, shotgun knockback, roket AoE.
 - 5 tipe musuh: grunt, shooter (flank + cover), heavy (charge), bomber (beep accelerando), boss (tiap kelipatan 5 wave).
 - Ekonomi health Quake-style: kill dekat menjatuhkan shard HP yang termagnet.
-- AI modern: flank, cover seek saat pemain menembak, flee saat HP kritis, Attack Token System (maks 3 melee menyerang serentak), telegraf spawn adil (min 10 m, di luar pandangan).
+- AI modern: flank, cover seek saat pemain menembak, flee saat HP kritis, Attack Token System (maks 3 melee menyerang serentak), model beranimasi (kaki berjalan, armor, tanduk boss), telegraf spawn adil.
 - Game feel: hit-stop, FOV kick, screen shake, damage vignette terarah, damage number, hit marker, kill-cascade (3+ kill < 1,5 dtk → domino ledakan + time-scale 0,35x).
 - Musik prosedural adaptif (Web Audio, zero aset) — layer calm crossfade combat berdasarkan kepadatan musuh & HP.
 - Audio spatial: panning stereo untuk tembakan, ledakan, beep bomber, dan damage arah.
