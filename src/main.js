@@ -53,6 +53,14 @@ function applySettings() {
   if (game.audio) { game.audio.setVolume(settings.vol); game.audio.setEnabled(!settings.mute); }
   if (game.music) game.music.bus.gain.value = settings.mute ? 0 : 0.4;
   document.body.classList.toggle('reduced-motion', settings.reduced);
+  // Crosshair customization (aksesibilitas)
+  const cross = document.getElementById('crosshair');
+  if (cross) {
+    const scale = parseFloat(document.getElementById('set-cross')?.value || '1');
+    const color = document.getElementById('set-cross-color')?.value || '#fff';
+    cross.style.fontSize = (scale * 10) + 'px';
+    cross.querySelectorAll('span').forEach(s => { s.style.background = color; });
+  }
 }
 function saveSettings() { try { localStorage.setItem('polyHordeSettings', JSON.stringify(settings)); } catch {} }
 
@@ -60,6 +68,8 @@ sens?.addEventListener('input', () => { settings.sens = parseFloat(sens.value); 
 vol?.addEventListener('input', () => { settings.vol = parseFloat(vol.value); applySettings(); saveSettings(); });
 mute?.addEventListener('change', () => { settings.mute = mute.checked; applySettings(); saveSettings(); });
 reduced?.addEventListener('change', () => { settings.reduced = reduced.checked; applySettings(); saveSettings(); });
+document.getElementById('set-cross')?.addEventListener('input', applySettings);
+document.getElementById('set-cross-color')?.addEventListener('change', applySettings);
 
 // High score di menu
 try {
