@@ -63,12 +63,16 @@ export class Game {
     Events.on('enemy-killed', (d) => {
       if (this.state !== STATE.PLAYING) return;
       this.kills++;
+      this.combo++;
+      this.comboTimer = 2.5;
       const tier = this.comboTier;
       const mul = tier >= 3 ? 3 : tier >= 2 ? 2 : tier >= 1 ? 1.5 : 1;
-      const val = Math.round(d.score * Math.max(1, this.combo + 1) * mul);
+      const val = Math.round(d.score * Math.max(1, this.combo) * mul);
       this.score += val;
       this.effects.damageNumber(d.pos, val, 'kill');
-      this.hitStop(0.05);
+      this.hitStop(0.04);
+      // Shard HP untuk kill dekat (< 8 m) — ekonomi agresi
+      if (d.pos.distanceTo(this.player.position) < 8) this.effects.shard(d.pos, d.type);
     });
 
     // Input untuk senjata & ability
@@ -197,6 +201,10 @@ export class Game {
     this.weapons.update(dt, this.input, this);
     this.enemies.update(dt, this.player, this);
     this.effects.update(dt);
+    this.effects.updateShards(dt, this.player, (heal) => {
+      this.player.heal(heal);
+      this.audio.pickup();
+    });
 
     // Kombo
     if (this.combo > 0) {

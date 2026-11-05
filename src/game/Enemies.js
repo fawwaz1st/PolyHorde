@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { buildEnemyModel } from '../core/Models.js';
+import { Events } from '../core/Events.js';
 
 export const ENEMY_TYPES = {
   grunt:  { hp: 32,  speed: 4.2, damage: 10, collision: 8,  score: 10, color: 0xff5566, size: 0.5, height: 1.2, attackRange: 1.6, attackCd: 1.0, type: 'melee' },
@@ -82,9 +83,12 @@ export class Enemies {
   _kill(e) {
     if (!e.alive) return;
     e.alive = false;
-    this.effects.death(e.pos, e.def.color);
-    this.audio.kill(e.pos);
+    const pos = e.pos.clone();
+    const score = e.def.score;
+    this.effects.death(pos, e.def.color);
+    this.audio.kill(pos);
     this._remove(e);
+    Events.emit('enemy-killed', { score, pos, type: e.type });
   }
 
   _remove(e) {
@@ -96,9 +100,12 @@ export class Enemies {
   explode(e) {
     if (!e.alive) return;
     e.alive = false;
-    this.effects.explosion(e.pos, e.def.radius);
-    this.audio.explosion(e.pos);
+    const pos = e.pos.clone();
+    const score = e.def.score;
+    this.effects.explosion(pos, e.def.radius);
+    this.audio.explosion(pos);
     this._remove(e);
+    Events.emit('enemy-killed', { score, pos, type: e.type });
   }
 
   update(dt, player, game) {

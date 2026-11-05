@@ -10,6 +10,17 @@ export class Effects {
     this._initParticles();
     this._tracers = [];
     this._decals = [];
+    // Shard HP (ekonomi agresi): kill dekat menjatuhkan shard yang termagnet
+    this._shardPool = [];
+    for (let i = 0; i < 20; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.2, 0),
+        new THREE.MeshBasicMaterial({ color: 0x4ade80, toneMapped: false })
+      );
+      mesh.visible = false;
+      engine.scene.add(mesh);
+      this._shardPool.push({ mesh, active: false, life: 0, heal: 0 });
+    }
     this._dmgPool = [];
     for (let i = 0; i < 12; i++) {
       const el = document.createElement('div');
@@ -98,6 +109,43 @@ export class Effects {
     const line = new THREE.Line(geo, mat);
     this.engine.scene.add(line);
     this._tracers.push({ line, life: 0.08 });
+  }
+
+  shard(pos, type) {
+    const heal = { grunt: 5, shooter: 8, heavy: 25, bomber: 12, boss: 50 }[type] ?? 5;
+    const s = this._shardPool.find(x => !x.active);
+    if (!s) return;
+    s.active = true; s.life = 6; s.heal = heal;
+    s.mesh.position.copy(pos);
+    s.mesh.position.y = 0.6;
+    s.mesh.visible = true;
+  }
+
+  updateShards(dt, player, onPickup) {
+    for (const s of this._shardPool) {
+      if (!s.active) continue;
+      s.life -= dt;
+      s.mesh.rotation.y += dt * 3;
+      const dx = player.position.x - s.mesh.position.x;
+      const dy = player.position.y - s.mesh.position.y;
+      const dz = player.position.z - s.mesh.position.z;
+      const d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < 16) {
+        const d = Math.sqrt(d2) || 1;
+        const pull = (1 - d / 4) * 12 * dt;
+        s.mesh.position.x += (dx / d) * pull;
+        s.mesh.position.y += (dy / d) * pull;
+        s.mesh.position.z += (dz / d) * pull;
+      } else {
+        s.mesh.position.y = 0.6 + Math.sin(performance.now() / 300 + s.heal) * 0.1;
+      }
+      if (d2 < 1.2) {
+        s.active = false; s.mesh.visible = false;
+        onPickup(s.heal);
+      } else if (s.life <= 0) {
+        s.active = false; s.mesh.visible = false;
+      }
+    }
   }
 
   damageNumber(pos, amount, kind = 'hit') {
