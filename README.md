@@ -9,7 +9,9 @@
 
 Arena FPS horde wave di browser. Low-poly, tanpa aset eksternal — semua mesh dan SFX dibuat prosedural saat runtime. Dibangun di Three.js r185 (WebGPURenderer, fallback WebGL2 otomatis) + Vite, total satu dependensi runtime.
 
-Play: `npm install && npm run dev` — buka http://localhost:5173, klik untuk pointer lock.
+**Main di browser: https://fawwaz1st.github.io/PolyHorde/**
+
+Lokal: `npm install && npm run dev` — buka http://localhost:5173, klik untuk pointer lock.
 
 ## Loop permainan
 
