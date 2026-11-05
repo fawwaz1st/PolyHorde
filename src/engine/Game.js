@@ -60,6 +60,8 @@ export class Game {
     this._baseFov = this.camera.fov;
     this._fovKick = 0;
     this._hitStopT = 0;
+    this.sensitivity = 1.0;
+    this.reducedMotion = false;
 
     // Timer
     this.timer = new THREE.Timer();
@@ -116,6 +118,14 @@ export class Game {
       this.score += Math.round(data.score * Math.max(1, combo + 1) * feverMul);
       // Hit-stop mikro pada kill (juice 2026)
       this.hitStop(0.05);
+      // Kill-cascade: 3+ kill dalam 1.5s -> domino ledakan berantai
+      const now = performance.now() / 1000;
+      this._killWindow = (this._killWindow || []).filter(t => now - t < 1.5);
+      this._killWindow.push(now);
+      if (this._killWindow.length >= 3 && !this._cascadeT) {
+        this._killWindow.length = 0;
+        this._triggerCascade(data.pos);
+      }
     });
 
     // Catharsis — clear wave: slow-mo singkat + chord naik (tension-release loop)
@@ -253,16 +263,20 @@ export class Game {
       this._hitStopT -= rawDt;
       dt *= 0.12;
     }
+    // Kill-cascade: time-scale 0.35x
+    if (this._cascadeT > 0) dt *= 0.35;
 
     if (this.state === STATES.PLAYING) {
       this._update(dt);
-      this.shake.update(dt);
-      this.camera.position.x += this.shake.offset.x;
-      this.camera.position.y += this.shake.offset.y;
+      if (!this.reducedMotion) {
+        this.shake.update(dt);
+        this.camera.position.x += this.shake.offset.x;
+        this.camera.position.y += this.shake.offset.y;
+      }
     }
 
     // FOV punch decay — hanya update projection saat berubah
-    if (this._fovKick > 0.001) {
+    if (this._fovKick > 0.001 && !this.reducedMotion) {
       this._fovKick *= (1 - rawDt * 9);
       this.camera.fov = this._baseFov + this._fovKick * 5;
       this.camera.updateProjectionMatrix();
@@ -281,7 +295,7 @@ export class Game {
   _update(dt) {
     // Mouse look
     if (this.input.isLocked) {
-      const sensitivity = 0.002;
+      const sensitivity = 0.002 * this.sensitivity;
       this.player.yaw -= this.input.mouse.dx * sensitivity;
       this.player.pitch = Math.max(-1.4, Math.min(1.4, this.player.pitch - this.input.mouse.dy * sensitivity));
     }
@@ -316,6 +330,7 @@ export class Game {
 
     // Update systems
     this.weaponSystem.update(dt, this.input, this.camera);
+    if (this.reducedMotion) { this.weaponSystem._bobTime = 0; this.weaponSystem.weaponGroup.position.x = 0; this.weaponSystem.weaponGroup.position.y = 0; }
     this.abilitySystem.update(dt, this.input);
     this.abilitySystem.updateGrenades(dt);
     this.enemyManager.update(dt, this.player, this.weaponSystem);
@@ -326,6 +341,20 @@ export class Game {
     // Explosion lights
     this._updateLights(dt);
 
+    // Kill-cascade
+    this._updateCascade(dt);
+
+    // Update listener audio untuk panning 3D-ish
+    if (this.audio?.ctx?.listener) {
+      const l = this.audio.ctx.listener;
+      const p = this.camera.position;
+      if (l.positionX) { l.positionX.value = p.x; l.positionY.value = p.y; l.positionZ.value = p.z; }
+      else l.setPosition(p.x, p.y, p.z);
+      if (l.forwardX) { l.forwardX.value = -Math.sin(this.player.yaw); l.forwardY.value = 0; l.forwardZ.value = -Math.cos(this.player.yaw); }
+      else if (l.setOrientation) l.setOrientation(-Math.sin(this.player.yaw), 0, -Math.cos(this.player.yaw), 0, 1, 0);
+      this.audio._listenerPos = { x: p.x, y: p.y, z: p.z };
+      this.audio._listenerYaw = this.player.yaw;
+    }
     // Musik adaptif: intensity naik dengan jumlah musuh hidup + tekanan HP
     const alive = this.enemyManager.aliveEnemies.length;
     const pressure = Math.min(1, alive / 18 + (1 - this.player.hp / this.player.maxHp) * 0.4);
@@ -353,6 +382,44 @@ export class Game {
   }
 
   // Reuse light dari pool — tidak ada alokasi / recompile material saat ledakan
+  // Kill-cascade: bangkai jadi inti detonasi berantai (maks 8, jeda 0.15s)
+  _triggerCascade(pos) {
+    this._cascadeT = 1.2;           // time-scale 0.35x selama 1.2s
+    this._cascadeQueue = [{ pos: pos.clone(), t: 0.15 }];
+    this.fovKick(0.5);              // zoom-out sesaat
+    this.audio.playExplosion();
+    this.hud.announceCascade();
+  }
+
+  _updateCascade(dt) {
+    if (this._cascadeT > 0) this._cascadeT -= dt;
+    if (!this._cascadeQueue || this._cascadeQueue.length === 0) return;
+    for (let i = this._cascadeQueue.length - 1; i >= 0; i--) {
+      const c = this._cascadeQueue[i];
+      c.t -= dt;
+      if (c.t <= 0) {
+        this._cascadeQueue.splice(i, 1);
+        // Detonasi kecil di posisi bangkai
+        this.particles.explosion(c.pos, 2.5);
+        this.spawnExplosionLight(c.pos, 0xffcc00, 6, 6);
+        this.game_shake.add(0.15);
+        // Damage musuh dalam radius (chain)
+        const enemies = this.enemyManager.aliveEnemies;
+        for (let j = enemies.length - 1; j >= 0; j--) {
+          const e = enemies[j];
+          const d = c.pos.distanceTo(e.mesh.position);
+          if (d < 2.5) {
+            e.mesh.userData.takeDamage?.(30 * (1 - d / 2.5), 0.4);
+            // Rantai: musuh yang mati dari cascade jadi inti detonasi lagi (maks 8)
+            if (this._cascadeQueue.length < 8) {
+              this._cascadeQueue.push({ pos: e.mesh.position.clone(), t: 0.15 });
+            }
+          }
+        }
+      }
+    }
+  }
+
   spawnExplosionLight(pos, color = 0xff6600, intensity = 8, radius = 10) {
     let slot = this._lightPool.find(s => !s.active);
     if (!slot) slot = this._lightPool[0]; // fallback: pakai tertua

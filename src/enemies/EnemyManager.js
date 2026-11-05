@@ -6,7 +6,9 @@ const BASE_TYPES = {
   grunt: { hp: 30, speed: 4, damage: 10, collisionDamage: 8, score: 10, color: 0xff4444, size: 0.5, height: 1.2, attackRange: 1.5, attackCooldown: 1.0, attackType: 'melee' },
   shooter: { hp: 20, speed: 2.5, damage: 8, collisionDamage: 4, score: 20, color: 0xff8844, size: 0.45, height: 1.3, attackRange: 15, attackCooldown: 1.5, attackType: 'ranged', projectileSpeed: 12 },
   heavy: { hp: 80, speed: 2, damage: 20, collisionDamage: 15, score: 35, color: 0x8844ff, size: 0.7, height: 1.8, attackRange: 2.0, attackCooldown: 1.5, attackType: 'melee' },
-  bomber: { hp: 40, speed: 6, damage: 40, collisionDamage: 40, score: 35, color: 0x44ff44, size: 0.5, height: 1.2, attackRange: 0.5, attackCooldown: 0.5, attackType: 'explode', explosionRadius: 3, explosionDamage: 50 }
+  bomber: { hp: 40, speed: 6, damage: 40, collisionDamage: 40, score: 35, color: 0x44ff44, size: 0.5, height: 1.2, attackRange: 0.5, attackCooldown: 0.5, attackType: 'explode', explosionRadius: 3, explosionDamage: 50 },
+  // Boss: elite heavy — muncul tiap 5 wave, HP 3x, charge mematikan, drop shard besar
+  boss: { hp: 260, speed: 3.2, damage: 30, collisionDamage: 25, score: 200, color: 0xffaa00, size: 1.2, height: 2.6, attackRange: 2.5, attackCooldown: 1.2, attackType: 'melee' }
 };
 
 // Ukuran wave — dipakai EnemyManager & HUD agar selalu konsisten
@@ -73,6 +75,7 @@ export class EnemyManager {
       shooter: new THREE.CylinderGeometry(BASE_TYPES.shooter.size * 0.7, BASE_TYPES.shooter.size * 0.5, BASE_TYPES.shooter.height, 6),
       heavy: new THREE.BoxGeometry(BASE_TYPES.heavy.size * 1.2, BASE_TYPES.heavy.height, BASE_TYPES.heavy.size * 1.2),
       bomber: new THREE.SphereGeometry(BASE_TYPES.bomber.size * 0.9, 8, 6),
+      boss: new THREE.BoxGeometry(BASE_TYPES.boss.size * 1.3, BASE_TYPES.boss.height, BASE_TYPES.boss.size * 1.3),
       eye: new THREE.SphereGeometry(0.08, 4, 4)
     };
     this._matTemplates = {};
@@ -137,6 +140,10 @@ export class EnemyManager {
       const type = pool[Math.floor(Math.random() * pool.length)];
       this.spawnQueue.push({ type, delay: i * 0.4 + Math.random() * 0.3, hpScale, spdScale });
     }
+    // Boss wave: tiap kelipatan 5, satu elite heavy di tengah antrean
+    if (wave % 5 === 0) {
+      this.spawnQueue.splice(Math.floor(this.spawnQueue.length / 2), 0, { type: 'boss', delay: 0.8, hpScale, spdScale });
+    }
     this.spawnTimer = 0;
   }
 
@@ -157,7 +164,7 @@ export class EnemyManager {
     this._tickAccum -= dt;
     const tickNow = this._tickAccum <= 0;
     if (tickNow) this._tickAccum = 0.22;
-    if (tickNow && this._telegraphs.length > 0) this.audio.playSpawnTick(); // sekali per tick, bukan per telegraf
+    if (tickNow && this._telegraphs.length > 0) this.audio.playSpawnTick(this._telegraphs[0].mesh.position); // sekali per tick, bukan per telegraf
     for (let i = this._telegraphs.length - 1; i >= 0; i--) {
       const tg = this._telegraphs[i];
       tg.t += dt;
@@ -242,6 +249,7 @@ export class EnemyManager {
     tg.mesh.material.opacity = 0.25;
     tg.mesh.visible = true;
     this._telegraphs.push(tg);
+    if (this._telegraphs.length === 1) this.game.hud?.showHint('telegraph', 'Ring merah = musuh akan muncul di sini.');
   }
 
   // Health shard: bob, magnet dalam 4 m, pickup -> player.heal
@@ -281,7 +289,7 @@ export class EnemyManager {
   }
 
   _dropShard(pos, type) {
-    const healByType = { grunt: 5, shooter: 8, heavy: 25, bomber: 12 };
+    const healByType = { grunt: 5, shooter: 8, heavy: 25, bomber: 12, boss: 50 };
     const sh = this._shardPool.find(x => !x.alive);
     if (!sh) return;
     sh.alive = true;
@@ -394,13 +402,15 @@ export class EnemyManager {
 
     switch (enemy.attackType) {
       case 'melee': {
-        if (enemy.type === 'heavy' && dist > 5 && dist < 12 && enemy.chargeTimer <= 0) {
+        const chargeRange = enemy.type === 'boss' ? 16 : 12;
+        if ((enemy.type === 'heavy' || enemy.type === 'boss') && dist > 5 && dist < chargeRange && enemy.chargeTimer <= 0) {
           enemy.charging = true;
-          enemy.chargeTimer = 0.8;
+          enemy.chargeTimer = enemy.type === 'boss' ? 1.1 : 0.8;
         }
         if (enemy.charging) {
           enemy.chargeTimer -= dt;
-          enemy.mesh.position.addScaledVector(dir, enemy.speed * 4 * dt);
+          const chargeMul = enemy.type === 'boss' ? 5 : 4;
+          enemy.mesh.position.addScaledVector(dir, enemy.speed * chargeMul * dt);
           this._clampBounds(enemy);
           if (enemy.chargeTimer <= 0) enemy.charging = false;
           if (dist < 1.8) { player.takeDamage(enemy.damage * 2); enemy.charging = false; }
@@ -451,7 +461,7 @@ export class EnemyManager {
         const beepInt = Math.max(0.12, 0.8 - dist * 0.06);
         if (dist < 12 && performance.now() - enemy._lastBeep > beepInt * 1000) {
           enemy._lastBeep = performance.now();
-          this.audio.playBomberBeep(dist);
+          this.audio.playBomberBeep(dist, enemy.mesh.position);
         }
         break;
       }
@@ -576,7 +586,10 @@ export class EnemyManager {
     this._cleanupEnemy(enemy);
     this.particles.deathExplosion(pos, color);
     this.audio.playKillTick();
-    if (nearPlayer) this._dropShard(pos, type);
+    if (nearPlayer) {
+      this._dropShard(pos, type);
+      this.game.hud?.showHint('shard', 'Shard hijau = HP. Dekati musuh untuk mengisi darah.');
+    }
     Events.emit('enemy-killed', { score, pos: pos.clone(), last: wasLast });
     if (wasLast) Events.emit('wave-clear', { pos: pos.clone() });
   }

@@ -32,6 +32,15 @@ High score disimpan di localStorage (`polyHordeHigh`).
 - **AI cover & flanking** — shooter swing wide ke flank, cover seek saat pemain menembak, obstacle avoidance; musuh beranimasi prosedural (idle sway, scale lunge).
 - **Precision**: headshot/weak-point multiplier, knockback per senjata (shotgun 1.5 m, rocket 0.6 m).
 
+## Aksesibilitas & onboarding (2026)
+
+- Settings di pause overlay: sensitivitas mouse, volume musik, mute, reduced motion.
+- Reduced motion: mematikan shake, FOV punch, weapon bob; CSS pulse/sweep juga dimatikan.
+- Micro-hint kontekstual JIT: toast 2,6 detik pada shard/telegraph/FEVER pertama per run.
+- Audio spatial-ish: StereoPanner untuk bomber beep & spawn tick (telinga jadi sensor arah).
+- Boss wave tiap kelipatan 5 (elite heavy, HP 3x, charge mematikan, shard 50 HP).
+- Kill-cascade: 3+ kill dalam 1,5 detik memicu domino ledakan berantai (maks 8) + time-scale 0,35x.
+
 ## Struktur
 
 `src/engine/` game state, input, audio, event bus · `src/player/` kapsul fisika · `src/enemies/` AI + shard + telegraph · `src/weapons/` · `src/abilities/` · `src/systems/` partikel, hash, outline · `src/ui/` HUD + radar · `index.html` menu/HUD markup.

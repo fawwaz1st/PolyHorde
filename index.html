@@ -150,6 +150,17 @@
       border: 2px solid #f44; background: transparent;
     }
 
+    /* === Reduced motion (aksesibilitas) === */
+    body.reduced-motion #radar::after { animation: none; }
+    body.reduced-motion #blocker .click-msg,
+    body.reduced-motion #pause-overlay .pause-sub,
+    body.reduced-motion #narrative-skip { animation: none; }
+    body.reduced-motion #wave-announce { animation: none; }
+    @media (prefers-reduced-motion: reduce) {
+      #radar::after { animation: none; }
+      #blocker .click-msg, #pause-overlay .pause-sub, #narrative-skip { animation: none; }
+    }
+
     /* === FEVER tier === */
     #fever-display.tier1 { color: #ff8; text-shadow: 0 0 8px rgba(255,255,136,0.6); }
     #fever-display.tier2 { color: #ff6; text-shadow: 0 0 12px rgba(255,255,68,0.7); }
@@ -211,6 +222,18 @@
       position: absolute; bottom: 2.5rem; font-size: 0.75rem; opacity: 0.5;
       animation: pulse 1.5s ease-in-out infinite;
     }
+
+    /* === Micro-hint toast === */
+    #hint-toast {
+      position: fixed; bottom: 8.5rem; left: 50%; transform: translateX(-50%);
+      z-index: 25; pointer-events: none;
+      font-family: 'Courier New', monospace; font-size: 0.8rem;
+      color: #fff; background: rgba(0,0,0,0.72);
+      border: 1px solid rgba(100,255,170,0.4); border-radius: 4px;
+      padding: 0.45rem 0.9rem; opacity: 0; transition: opacity 0.3s;
+      text-shadow: 0 0 6px rgba(100,255,170,0.4);
+    }
+    #hint-toast.show { opacity: 1; }
 
     /* === Objective HUD === */
     #objective {
@@ -348,6 +371,20 @@
     <div style="text-align:center">
       <div class="pause-title">PAUSED</div>
       <div class="pause-sub">Klik untuk lanjut bertempur</div>
+      <div style="margin-top:1.5rem;display:flex;flex-direction:column;gap:0.5rem;align-items:center">
+        <label style="font-size:0.8rem;opacity:0.75;display:flex;align-items:center;gap:0.6rem">
+          Sensitivitas <input id="set-sens" type="range" min="0.3" max="3" step="0.1" value="1" style="width:140px">
+        </label>
+        <label style="font-size:0.8rem;opacity:0.75;display:flex;align-items:center;gap:0.6rem">
+          Volume Musik <input id="set-music" type="range" min="0" max="1" step="0.05" value="0.55" style="width:140px">
+        </label>
+        <label style="font-size:0.8rem;opacity:0.75;display:flex;align-items:center;gap:0.6rem">
+          <input id="set-mute" type="checkbox"> Bisukan semua
+        </label>
+        <label style="font-size:0.8rem;opacity:0.75;display:flex;align-items:center;gap:0.6rem">
+          <input id="set-reduced" type="checkbox"> Kurangi gerak (reduced motion)
+        </label>
+      </div>
       <button class="pause-restart" id="pause-restart" style="background:transparent;color:#fff;font-family:inherit;cursor:pointer;">[ RESTART RUN ]</button>
     </div>
   </div>
@@ -364,6 +401,9 @@
 
   <!-- Objective -->
   <div id="objective"></div>
+
+  <!-- Micro-hint toast (onboarding JIT) -->
+  <div id="hint-toast"></div>
 
   <!-- Wave Announcement -->
   <div id="wave-announce"></div>

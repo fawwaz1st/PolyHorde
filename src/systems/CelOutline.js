@@ -1,22 +1,18 @@
 import * as THREE from 'three/webgpu';
 
-// Cel-shading outline via TSL
-export function addOutline(mesh, scene, color = 0x000000, thickness = 1, addToScene = true) {
-  _createOutlineMesh(mesh, scene, color, thickness, addToScene);
+// Cel-shading outline: inverted hull, material & geometry di-share
+export function addOutline(mesh, color = 0x000000, thickness = 1) {
+  _createOutlineMesh(mesh, color, thickness);
 }
 
-// Traditional inverted-hull outline (works with all materials)
-function _createOutlineMesh(original, scene, color, thickness, addToScene) {
+function _createOutlineMesh(original, color, thickness) {
   if (original.type === 'Group') {
-    // Apply to children
     original.children.forEach(child => {
-      if (child.isMesh) {
-        _createOutlineMeshForSingle(child, scene, color, thickness, addToScene);
-      }
+      if (child.isMesh) _createOutlineMeshForSingle(child, color, thickness);
     });
     return;
   }
-  _createOutlineMeshForSingle(original, scene, color, thickness, addToScene);
+  _createOutlineMeshForSingle(original, color, thickness);
 }
 
 // Material outline di-share global (dulu 1 material + geometry.clone() per mesh = boros draw/compile)
@@ -35,7 +31,7 @@ function _outlineMaterial(color) {
   return _sharedOutlineMat;
 }
 
-function _createOutlineMeshForSingle(mesh, scene, color, thickness) {
+function _createOutlineMeshForSingle(mesh, color, thickness) {
   // Geometry di-reuse (bukan clone) — hemat memori & vertex buffer
   const mat = _outlineMaterial(color);
   const outlineMesh = new THREE.Mesh(mesh.geometry, mat);
@@ -49,5 +45,4 @@ function _createOutlineMeshForSingle(mesh, scene, color, thickness) {
   if (!mesh.userData.outline) mesh.userData.outline = outlineMesh;
 }
 
-// Export the helper so it works
-export { _createOutlineMesh as createOutlineMesh };
+

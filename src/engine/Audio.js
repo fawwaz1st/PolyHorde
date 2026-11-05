@@ -50,6 +50,24 @@ export class Audio {
     return { buffer: buf, gainNode: g };
   }
 
+  // Stereo pan dari sudut relatif yaw pemain (-1 kiri .. 1 kanan) — audio spatial-ish
+  _pan(pos, dest) {
+    if (!this.ctx || !this.ctx.listener) return dest;
+    const p = this.ctx.createStereoPanner();
+    p.pan.value = 0;
+    if (pos && this._listenerPos) {
+      const dx = pos.x - this._listenerPos.x;
+      const dz = pos.z - this._listenerPos.z;
+      // project ke sumbu kanan kamera
+      const rightX = -Math.sin(this._listenerYaw);
+      const rightZ = -Math.cos(this._listenerYaw);
+      const len = Math.hypot(dx, dz) || 1;
+      p.pan.value = Math.max(-1, Math.min(1, (dx * rightX + dz * rightZ) / len));
+    }
+    p.connect(dest ?? this._out());
+    return p;
+  }
+
   _tone(type, f0, f1, t0, dur, gain, dest) {
     const osc = this.ctx.createOscillator();
     const g = this.ctx.createGain();
@@ -161,19 +179,38 @@ export class Audio {
   }
 
   // Beep bomber accelerando — makin dekat makin cepat (keterbacaan ancaman, riset 2026)
-  playBomberBeep(dist) {
+  playBomberBeep(dist, pos) {
     if (!this.enabled) return;
     this._ensureResumed();
     const t = this.ctx.currentTime;
     const urgency = Math.max(0, Math.min(1, 1 - dist / 12));
-    this._tone('square', 1400, 1400, t, 0.05, 0.03 + urgency * 0.05);
+    const panner = this._pan(pos, this._out());
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'square'; osc.frequency.value = 1400;
+    g.gain.setValueAtTime(0.03 + urgency * 0.05, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+    osc.connect(g).connect(panner);
+    osc.start(t); osc.stop(t + 0.05);
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); panner.disconnect(); } catch {} };
   }
 
   // Tick telegraf spawn (ring membesar di lantai)
-  playSpawnTick() {
+  playSpawnTick(pos) {
     if (!this.enabled) return;
     this._ensureResumed();
-    this._tone('sine', 620, 940, this.ctx.currentTime, 0.07, 0.04);
+    const panner = this._pan(pos, this._out());
+    const t = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(620, t);
+    osc.frequency.exponentialRampToValueAtTime(940, t + 0.07);
+    g.gain.setValueAtTime(0.04, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    osc.connect(g).connect(panner);
+    osc.start(t); osc.stop(t + 0.08);
+    osc.onended = () => { try { osc.disconnect(); g.disconnect(); panner.disconnect(); } catch {} };
   }
 
   // Pickup health shard

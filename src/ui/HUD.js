@@ -34,7 +34,8 @@ export class HUD {
       pause: document.getElementById('pause-overlay'),
       goRestart: document.getElementById('go-restart'),
       damageArc: document.getElementById('damage-arc'),
-      fever: document.getElementById('fever-display')
+      fever: document.getElementById('fever-display'),
+      hintToast: document.getElementById('hint-toast')
     };
 
     this.damageFlashTimer = 0;
@@ -260,11 +261,24 @@ export class HUD {
     this.el.gameOver.classList.remove('show');
     if (this.el.goNewHigh) this.el.goNewHigh.style.display = 'none';
   }
+  // Micro-hint: toast kontekstual JIT — sekali per run per event (onboarding)
+  showHint(id, text) {
+    if (this._hints?.has(id)) return;
+    if (!this._hints) this._hints = new Set();
+    this._hints.add(id);
+    if (!this.el.hintToast) return;
+    this.el.hintToast.textContent = text;
+    this.el.hintToast.classList.add('show');
+    clearTimeout(this._hintT);
+    this._hintT = setTimeout(() => this.el.hintToast?.classList.remove('show'), 2600);
+  }
+
   resetCombo() {
     this.combo = 0;
     this.comboTimer = 0;
     this._last.combo = '';
     if (this.el.comboDisplay) this.el.comboDisplay.style.opacity = 0;
+    if (this._hints) this._hints.clear();
   }
 
   flashDamage() {
@@ -301,6 +315,13 @@ export class HUD {
     this.waveAnnounceTimer = 3;
     this.el.waveAnnounce.classList.remove('incoming');
     this.el.waveAnnounce.innerHTML = 'WAVE ' + wave + '<div class="sub">— ' + waveSize(wave) + ' enemies —</div>';
+    this.el.waveAnnounce.style.opacity = 1;
+  }
+
+  announceCascade() {
+    this.waveAnnounceTimer = 2;
+    this.el.waveAnnounce.classList.remove('incoming');
+    this.el.waveAnnounce.innerHTML = 'KILL CASCADE<div class="sub">— domino ledakan —</div>';
     this.el.waveAnnounce.style.opacity = 1;
   }
 
@@ -421,6 +442,7 @@ export class HUD {
     const combo = this.combo;
     const feverTier = combo >= 30 ? 3 : combo >= 15 ? 2 : combo >= 5 ? 1 : 0;
     if (feverTier !== (this._last.feverTier ?? 0)) {
+      if (feverTier === 1) this.showHint('fever1', 'FEVER I — skor x1.5. Combo 15 = x2 + tembak cepat.');
       if (feverTier > 0 && this.el.fever) {
         this.el.fever.textContent = '';
         this.el.fever.className = 'fever tier' + feverTier;

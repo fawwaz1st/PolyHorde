@@ -159,8 +159,6 @@ export class Particles {
       }
 
       const t = Math.max(0, this._life[writeIdx] / this._maxLife[writeIdx]);
-      // fade size berdasarkan sisa life (dulu t dihitung tapi tak dipakai)
-      if (writeIdx < MAX) this.geo.attributes.size = this.geo.attributes.size; // noop guard
       writeIdx++;
     }
 
