@@ -111,6 +111,11 @@ export class Weapons {
     this._dir.set(0, 0, -1).applyQuaternion(this.engine.camera.quaternion);
     this._tmp.copy(this.player.position).addScaledVector(this._dir, 1.2);
     this.effects.muzzle(this._tmp, w.color);
+    // Shell casing memantul ke kanan
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.engine.camera.quaternion);
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(this.engine.camera.quaternion);
+    this._tmp.copy(this.player.position).addScaledVector(this._dir, 0.6);
+    this.effects.shellCasing(this._tmp, right, up);
 
     if (w.projectile) { this._spawnRocket(w, game); return; }
 

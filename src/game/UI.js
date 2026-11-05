@@ -62,6 +62,21 @@ export class UI {
     }
   }
 
+  // Killfeed: daftar kill terbaru
+  killfeed(text) {
+    if (!this._feed) this._feed = [];
+    this._feed.unshift(text);
+    if (this._feed.length > 5) this._feed.pop();
+    let el = document.getElementById('killfeed');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'killfeed';
+      el.style.cssText = 'position:fixed;top:4rem;right:1.2rem;z-index:20;text-align:right;font-family:var(--mono);font-size:0.75rem;color:var(--dim);pointer-events:none';
+      document.body.appendChild(el);
+    }
+    el.innerHTML = this._feed.map(f => '<div style="opacity:0.8">' + f + '</div>').join('');
+  }
+
   showHint(text) {
     if (!this.el.hint) return;
     this.el.hint.textContent = text;

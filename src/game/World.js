@@ -7,6 +7,8 @@ export class World {
   constructor(scene) {
     this.scene = scene;
     this.props = [];      // { mesh, x, z, radius } untuk collision & cover
+    this.platforms = [];  // { x, z, top, half } platform tinggi
+    this.zones = [];      // { x, z, r, type } zona lava/ice
     this._build();
   }
 
@@ -71,17 +73,16 @@ export class World {
     neon.instanceMatrix.needsUpdate = true;
     this.scene.add(neon);
 
-    // Cover props: block, crate, crystal, pillar — tersebar merata
-    const kinds = ['block', 'crate', 'crystal', 'pillar'];
+    // Cover props: block, crate, crystal, pillar — tersebar merata (18 titik)
+    const kinds = ['block', 'crate', 'crystal', 'pillar', 'block', 'crate'];
     const positions = [];
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 14) * Math.PI * 2 + 0.3;
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2 + 0.3;
       const r = 6 + (i % 3) * 4;
-      positions.push([Math.cos(a) * r, Math.sin(a) * r]);
+      positions.push([Math.cos(a) * r, Math.sin(a) * r, kinds[i % kinds.length]]);
     }
-    positions.push([0, 0]); // pilar tengah
-    positions.forEach(([x, z], i) => {
-      const kind = kinds[i % kinds.length];
+    positions.push([0, 0, 'pillar']); // pilar tengah
+    positions.forEach(([x, z, kind], i) => {
       const mesh = buildProp(kind, i + 1);
       mesh.position.x = x; mesh.position.z = z;
       mesh.position.y = kind === 'pillar' ? 2 : kind === 'crystal' ? 0.8 : 0.75;
@@ -90,6 +91,45 @@ export class World {
       const radius = kind === 'pillar' ? 0.7 : kind === 'crystal' ? 0.9 : 0.8;
       this.props.push({ mesh, x, z, radius: radius + 0.4 });
     });
+
+    // Zona lava (merah/oranye): berbahaya
+    const lava = new THREE.Mesh(
+      new THREE.CircleGeometry(4, 24),
+      new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.35, toneMapped: false })
+    );
+    lava.rotation.x = -Math.PI / 2;
+    lava.position.set(-12, 0.015, -10);
+    this.scene.add(lava);
+    this.zones = [{ x: -12, z: -10, r: 4, type: 'lava' }];
+
+    // Zona ice (biru): memperlambat
+    const ice = new THREE.Mesh(
+      new THREE.CircleGeometry(4, 24),
+      new THREE.MeshBasicMaterial({ color: 0x44ccff, transparent: true, opacity: 0.3, toneMapped: false })
+    );
+    ice.rotation.x = -Math.PI / 2;
+    ice.position.set(12, 0.015, 10);
+    this.scene.add(ice);
+    this.zones.push({ x: 12, z: 10, r: 4, type: 'ice' });
+
+    // Platform tinggi (bisa di lompat)
+    for (const [px, pz, ph] of [[-8, 8, 0.9], [8, -8, 0.9], [0, 12, 1.4], [0, -12, 1.4]]) {
+      const plat = new THREE.Mesh(
+        new THREE.BoxGeometry(3, ph, 3),
+        new THREE.MeshStandardMaterial({ color: 0x2a3a5a, roughness: 0.7, flatShading: true })
+      );
+      plat.position.set(px, ph / 2, pz);
+      plat.castShadow = true; plat.receiveShadow = true;
+      this.scene.add(plat);
+      this.platforms.push({ x: px, z: pz, top: ph, half: 1.5 });
+      // Crystals di platform
+      const cry = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.5, 0),
+        new THREE.MeshBasicMaterial({ color: 0x6fb7ff, toneMapped: false })
+      );
+      cry.position.set(px, ph + 0.6, pz);
+      this.scene.add(cry);
+    }
 
     // Lighting: ambient + directional (shadow) + rim + accent points
     const ambient = new THREE.AmbientLight(0x445577, 0.7);
@@ -137,12 +177,39 @@ export class World {
         pos.z += (dz / d) * push;
       }
     }
+    // Platform: naik ke atas jika melompat, dorong samping jika tidak
+    for (const pl of this.platforms) {
+      const dx = pos.x - pl.x, dz = pos.z - pl.z;
+      if (Math.abs(dx) < pl.half + radius && Math.abs(dz) < pl.half + radius) {
+        if (pos.y >= pl.top - 0.3) {
+          pos.y = Math.max(pos.y, pl.top + 1); // berdiri di platform
+        } else if (pos.y < pl.top) {
+          // Dorong keluar dari samping
+          const pushX = (pl.half + radius) - Math.abs(dx);
+          const pushZ = (pl.half + radius) - Math.abs(dz);
+          if (pushX < pushZ) pos.x += Math.sign(dx) * pushX;
+          else pos.z += Math.sign(dz) * pushZ;
+        }
+      }
+    }
     // Batas arena
     const h = Math.hypot(pos.x, pos.z);
     if (h > this.radius - radius) {
       const s = (this.radius - radius) / h;
       pos.x *= s; pos.z *= s;
     }
+  }
+
+  // Zona efek: lava (damage) / ice (slow)
+  zoneEffect(pos) {
+    for (const z of this.zones) {
+      const d = Math.hypot(pos.x - z.x, pos.z - z.z);
+      if (d < z.r) {
+        if (z.type === 'lava') return { lava: true, slow: false };
+        if (z.type === 'ice') return { lava: false, slow: true };
+      }
+    }
+    return { lava: false, slow: false };
   }
 
   // Cari cover terdekat dari posisi (untuk AI)

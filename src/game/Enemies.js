@@ -87,6 +87,7 @@ export class Enemies {
     const pos = e.pos.clone();
     const score = e.def.score;
     this.effects.death(pos, e.def.color);
+    this.effects.decal(pos);
     this.audio.kill(pos);
     // Animasi kematian: jatuh + menyusut selama 0.3s
     this._dying.push({ e, t: 0.3 });

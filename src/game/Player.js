@@ -122,6 +122,11 @@ export class Player {
       }
     }
 
+    // --- Zona: lava membakar, ice memperlambat ---
+    const zone = this.world.zoneEffect ? this.world.zoneEffect(this.pos) : { lava: false, slow: false };
+    if (zone.lava) this.takeDamage(12 * dt);
+    const spdMul = zone.slow ? 0.55 : 1;
+
     // --- Gravity ---
     this.vel.y += GRAVITY * dt;
 
@@ -157,9 +162,23 @@ export class Player {
 
     // --- Camera ---
     this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
+    const spd = Math.hypot(this.vel.x, this.vel.z);
+    // FOV berdasarkan kecepatan (sprint 78->86)
+    const fovTarget = 78 + Math.min(spd / 11, 1) * 8;
+    if (!this._fovSmooth) this._fovSmooth = 78;
+    this._fovSmooth += (fovTarget - this._fovSmooth) * dt * 6;
+    this.engine.camera.fov = this._fovSmooth;
+    this.engine.camera.updateProjectionMatrix();
+    // Strafe roll: miring saat strafing
+    const strafe = this.vel.x * Math.cos(this.yaw) - this.vel.z * Math.sin(this.yaw);
+    const roll = Math.max(-0.03, Math.min(0.03, -strafe * 0.004));
+    // Landing dip
+    if (this.onGround && !this._wasGround) this._landDip = 0.12;
+    if (this._landDip > 0.001) this._landDip *= (1 - dt * 8); else this._landDip = 0;
+    this._wasGround = this.onGround;
     this.engine.camera.position.copy(this.pos);
-    this.engine.camera.position.y += 0.55;
-    this.engine.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch + this.recoil.y, this.yaw + this.recoil.x, 0, 'YXZ'));
+    this.engine.camera.position.y += 0.55 - this._landDip;
+    this.engine.camera.quaternion.setFromEuler(new THREE.Euler(this.pitch + this.recoil.y, this.yaw + this.recoil.x, roll, 'YXZ'));
   }
 
   addRecoil(amount) {

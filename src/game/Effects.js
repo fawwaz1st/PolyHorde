@@ -71,6 +71,30 @@ export class Effects {
       const a = Math.random() * Math.PI * 2, s = 2 + Math.random() * 4;
       this._emit(pos.x, pos.y, pos.z, Math.cos(a) * s, (Math.random() - 0.3) * s, Math.sin(a) * s, color, 0.12);
     }
+    // Smoke: partikel lambat membesar
+    for (let i = 0; i < 3; i++) {
+      this._emit(pos.x, pos.y, pos.z, (Math.random() - 0.5) * 0.5, 0.3 + Math.random() * 0.3, (Math.random() - 0.5) * 0.5, 0x888899, 0.6);
+    }
+  }
+
+  shellCasing(pos, right, up) {
+    // Casing kuningan memantul dari senjata
+    const rx = right.x * (1.5 + Math.random() * 1.5) + up.x * 1.2;
+    const rz = right.z * (1.5 + Math.random() * 1.5) + up.z * 1.2;
+    const ry = 2 + Math.random() * 1.5;
+    this._emit(pos.x, pos.y, pos.z, rx, ry, rz, 0xffcc44, 0.7);
+  }
+
+  decal(pos) {
+    // Decal gelap di lantai (blood/scorch)
+    const mesh = new THREE.Mesh(
+      new THREE.CircleGeometry(0.3 + Math.random() * 0.3, 8),
+      new THREE.MeshBasicMaterial({ color: 0x220011, transparent: true, opacity: 0.5, depthWrite: false })
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(pos.x, 0.02, pos.z);
+    this.engine.scene.add(mesh);
+    this._decals.push({ mesh, life: 6 });
   }
 
   impact(pos, color) {
@@ -183,6 +207,14 @@ export class Effects {
     this.points.geometry.setDrawRange(0, write);
     this.points.geometry.attributes.position.needsUpdate = true;
     this.points.geometry.attributes.color.needsUpdate = true;
+
+    // Decal fade
+    for (let i = this._decals.length - 1; i >= 0; i--) {
+      const d = this._decals[i];
+      d.life -= dt;
+      d.mesh.material.opacity = Math.max(0, d.life / 6) * 0.5;
+      if (d.life <= 0) { this.engine.scene.remove(d.mesh); d.mesh.geometry.dispose(); d.mesh.material.dispose(); this._decals.splice(i, 1); }
+    }
 
     // Tracer
     for (let i = this._tracers.length - 1; i >= 0; i--) {

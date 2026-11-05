@@ -37,7 +37,7 @@ export class Game {
     this.shake = { intensity: 0, offset: { x: 0, y: 0 }, add(v) { this.intensity = Math.min(this.intensity + v, 1.5); } };
     this._fovKick = 0;
     this._hitStop = 0;
-    this._baseFov = 78;
+    this._baseFov = 78; // disinkronkan dengan FOV dasar Player
 
     // Systems
     this.engine = new Engine(canvas);
@@ -78,6 +78,7 @@ export class Game {
       const val = Math.round(d.score * Math.max(1, this.combo) * mul);
       this.score += val;
       this.effects.damageNumber(d.pos, val, 'kill');
+      this.ui.killfeed('☠ ' + d.type.toUpperCase() + '  +' + val);
       this.hitStop(0.04);
       // Shard HP untuk kill dekat (< 8 m) — ekonomi agresi
       if (d.pos.distanceTo(this.player.position) < 8) {
