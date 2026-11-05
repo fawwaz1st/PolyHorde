@@ -23,6 +23,7 @@ export class UI {
       hint: document.getElementById('hint'),
       bossBar: document.getElementById('boss-bar'),
       bossFill: document.getElementById('boss-fill'),
+      abilities: document.getElementById('abilities'),
     };
     this._last = {};
     this._fadeT = 0;
@@ -78,6 +79,7 @@ export class UI {
     this._annT = setTimeout(() => { this.el.announce.style.opacity = '0'; }, incoming ? 3400 : 3000);
   }
 
+  _cd(v, max) { return max > 0 ? Math.max(0, v) : 0; }
   setBoss(hp, max) {
     if (!this.el.bossBar) return;
     this.el.bossBar.style.display = hp > 0 ? 'block' : 'none';
@@ -145,6 +147,16 @@ export class UI {
     // Radar 10Hz
     this._radarT = (this._radarT || 0) - dt;
     if (this._radarT <= 0) { this._radarT = 0.1; this._updateRadar(game); }
+
+    // Boss bar
+    const boss = game.enemies.list.find(e => e.type === 'boss');
+    this.setBoss(boss ? boss.hp : 0, boss ? boss.maxHp : 1);
+
+    // Ability cooldowns (diegetik di pojok kanan bawah)
+    const dashCd = Math.max(0, game.player.dashCd);
+    const shieldCd = Math.max(0, game.player.shieldCd);
+    const abTxt = 'Q ' + dashCd.toFixed(0) + '  E ' + shieldCd.toFixed(0) + '  F ' + game.grenades;
+    if (abTxt !== this._last.abTxt) { this.el.abilities.textContent = abTxt; this._last.abTxt = abTxt; }
 
     // Objective
     if (game.objective && game.objective !== this._last.obj) {

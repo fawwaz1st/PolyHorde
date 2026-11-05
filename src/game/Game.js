@@ -21,6 +21,10 @@ export class Game {
     this.objective = '';
     this.spawnQueue = [];
     this.rockets = [];
+    this.grenades = 3;
+    this.grenadeCd = 0;
+    this.grenadeList = [];
+    this._grenadePool = [];
     this.waveCooldown = 0;
     this._waveIncoming = false;
     this._nextWave = 0;
@@ -73,6 +77,14 @@ export class Game {
       this.hitStop(0.04);
       // Shard HP untuk kill dekat (< 8 m) — ekonomi agresi
       if (d.pos.distanceTo(this.player.position) < 8) this.effects.shard(d.pos, d.type);
+      // Kill-cascade: 3+ kill dalam 1,5 detik -> domino ledakan berantai
+      const now = performance.now() / 1000;
+      this._killWindow = (this._killWindow || []).filter(t => now - t < 1.5);
+      this._killWindow.push(now);
+      if (this._killWindow.length >= 3 && !this._cascadeT) {
+        this._killWindow.length = 0;
+        this._triggerCascade(d.pos);
+      }
     });
 
     // Input untuk senjata & ability
@@ -107,6 +119,9 @@ export class Game {
     this.spawnQueue = [];
     this.rockets.forEach(r => this.engine.scene.remove(r.mesh));
     this.rockets = [];
+    this.grenades = 3; this.grenadeCd = 0;
+    this.grenadeList.forEach(g => this.engine.scene.remove(g.mesh));
+    this.grenadeList = [];
     this.player.reset();
     this.weapons.reset();
     this.enemies.reset();
@@ -144,6 +159,36 @@ export class Game {
     this.ui.showGameOver(this.score, this.wave, this.kills, isNew);
   }
 
+  _triggerCascade(pos) {
+    this._cascadeT = 1.2;
+    this._cascadeQueue = [{ pos: pos.clone(), t: 0.15 }];
+    this.fovKick(0.5);
+    this.audio.explosion(pos, true);
+    this.ui.announce('KILL CASCADE', '— domino ledakan —');
+  }
+
+  _updateCascade(dt) {
+    if (this._cascadeT > 0) this._cascadeT -= dt;
+    if (!this._cascadeQueue || this._cascadeQueue.length === 0) return;
+    for (let i = this._cascadeQueue.length - 1; i >= 0; i--) {
+      const c = this._cascadeQueue[i];
+      c.t -= dt;
+      if (c.t <= 0) {
+        this._cascadeQueue.splice(i, 1);
+        this.effects.explosion(c.pos, 2.5);
+        this.shake.add(0.15);
+        for (let j = this.enemies.list.length - 1; j >= 0; j--) {
+          const e = this.enemies.list[j];
+          const d = c.pos.distanceTo(e.pos);
+          if (d < 2.5) {
+            this.enemies.damage(e, 30 * (1 - d / 2.5), 0.4);
+            if (this._cascadeQueue.length < 8) this._cascadeQueue.push({ pos: e.pos.clone(), t: 0.15 });
+          }
+        }
+      }
+    }
+  }
+
   // --- Juice ---
   hitStop(t) { this._hitStop = Math.max(this._hitStop, t); }
   fovKick(v) { this._fovKick = Math.min(this._fovKick + v, 2.5); }
@@ -159,7 +204,8 @@ export class Game {
     this._clock = performance.now();
 
     if (this._hitStop > 0) { this._hitStop -= dt; this._slow = true; } else this._slow = false;
-    const sdt = this._slow ? dt * 0.12 : dt;
+    let sdt = this._slow ? dt * 0.12 : dt;
+    if (this._cascadeT > 0) sdt *= 0.35;
 
     if (this.state === STATE.PLAYING) {
       this._update(sdt, dt);
@@ -199,6 +245,7 @@ export class Game {
 
     this.player.update(dt);
     this.weapons.update(dt, this.input, this);
+    this._updateAbilities(dt);
     this.enemies.update(dt, this.player, this);
     this.effects.update(dt);
     this.effects.updateShards(dt, this.player, (heal) => {
@@ -225,6 +272,7 @@ export class Game {
 
     // Wave management
     this._updateWaves(dt);
+    this._updateCascade(dt);
 
     // Musik intensity
     const alive = this.enemies.list.length;
@@ -248,6 +296,48 @@ export class Game {
 
     // Input cleanup
     this.input.endFrame();
+  }
+
+  _updateAbilities(dt) {
+    if (this.grenadeCd > 0) this.grenadeCd -= dt;
+    if (this.input.justDown('KeyF') && this.grenades > 0 && this.grenadeCd <= 0) {
+      this.grenades--;
+      this.grenadeCd = 4;
+      this._throwGrenade();
+    }
+    // Update grenade projectiles
+    for (let i = this.grenadeList.length - 1; i >= 0; i--) {
+      const g = this.grenadeList[i];
+      g.vel.y -= 18 * dt;
+      g.mesh.position.addScaledVector(g.vel, dt);
+      if (g.mesh.position.y < 0.15) { g.mesh.position.y = 0.15; g.vel.y *= -0.4; g.vel.x *= 0.7; g.vel.z *= 0.7; }
+      g.life -= dt;
+      if (g.life <= 0) {
+        this.effects.explosion(g.mesh.position, 4);
+        this.audio.explosion(g.mesh.position);
+        this.shake.add(0.4);
+        for (let j = this.enemies.list.length - 1; j >= 0; j--) {
+          const e = this.enemies.list[j];
+          const d = g.mesh.position.distanceTo(e.pos);
+          if (d < 4) this.enemies.damage(e, 65 * (1 - d / 4), 0.5);
+        }
+        this.engine.scene.remove(g.mesh);
+        this.grenadeList.splice(i, 1);
+      }
+    }
+  }
+
+  _throwGrenade() {
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.16, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0x4ade80, toneMapped: false })
+    );
+    mesh.position.copy(this.player.position);
+    const dir = new THREE.Vector3(-Math.sin(this.player.yaw), 0.35, -Math.cos(this.player.yaw)).normalize();
+    mesh.position.addScaledVector(dir, 1);
+    this.engine.scene.add(mesh);
+    this.grenadeList.push({ mesh, vel: dir.multiplyScalar(14), life: 2.2 });
+    this.audio.shoot('pistol');
   }
 
   _updateWaves(dt) {
@@ -278,7 +368,7 @@ export class Game {
       this.ui.announce('WAVE ' + this._nextWave, '— ' + this.enemies.waveSize(this._nextWave) + ' musuh —', true);
       this.audio.waveClear();
       this.score += this.wave * 50;
-      // Resupply grenade & heal kecil
+      this.grenades = 3;
       this.player.heal(8);
     }
   }
