@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="docs/v2-menu.png" alt="PolyHorde — menu utama" width="640">
+  <img src="docs/v3-menu.png" alt="PolyHorde — menu utama" width="640">
 </p>
 <p align="center">
-  <img src="docs/v2-gameplay.png" alt="PolyHorde — pertarungan wave" width="640">
+  <img src="docs/v3-gameplay.png" alt="PolyHorde — pertarungan wave" width="640">
 </p>
 
 # PolyHorde
@@ -39,11 +39,11 @@ WASD gerak, mouse lihat / tembak, Shift sprint, Space lompat, Q dash, E shield, 
 - 4 senjata dengan peran jelas: pistol presisi, AR penyapu, shotgun knockback, roket AoE.
 - 5 tipe musuh: grunt, shooter (flank + cover), heavy (charge), bomber (beep accelerando), boss (tiap kelipatan 5 wave).
 - Ekonomi health Quake-style: kill dekat menjatuhkan shard HP yang termagnet.
-- AI modern: flank, cover seek saat pemain menembak, flee saat HP kritis, telegraf spawn adil (min 10 m, di luar pandangan).
-- Game feel: hit-stop, FOV kick, screen shake, damage vignette terarah, damage number, hit marker.
+- AI modern: flank, cover seek saat pemain menembak, flee saat HP kritis, Attack Token System (maks 3 melee menyerang serentak), telegraf spawn adil (min 10 m, di luar pandangan).
+- Game feel: hit-stop, FOV kick, screen shake, damage vignette terarah, damage number, hit marker, kill-cascade (3+ kill < 1,5 dtk → domino ledakan + time-scale 0,35x).
 - Musik prosedural adaptif (Web Audio, zero aset) — layer calm crossfade combat berdasarkan kepadatan musuh & HP.
 - Audio spatial: panning stereo untuk tembakan, ledakan, beep bomber, dan damage arah.
-- HUD diegetik: auto-fade di luar tempur, reticle reaktif (gap melebar saat spread), radar colorblind-safe.
+- HUD diegetik: auto-fade di luar tempur, reticle reaktif (gap melebar saat spread), radar colorblind-safe, hitung mundur wave, micro-hint onboarding JIT.
 - Aksesibilitas: sensitivitas, volume, mute, reduced motion (mengikuti OS), semua persisten di localStorage.
 
 ## Performa
