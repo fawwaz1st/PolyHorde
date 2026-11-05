@@ -142,7 +142,8 @@ export class Enemies {
       // Token: hanya melee yang mendapat token yang menyerang
       const wasAttacking = e._attacking;
       e._attacking = false;
-      if (def.type === 'melee' && dist <= def.attackRange + 0.5 && meleeTokens > 0) {
+      const eDist = e.pos.distanceTo(player.position);
+      if (e.def.type === 'melee' && eDist <= e.def.attackRange + 0.5 && meleeTokens > 0) {
         meleeTokens--; e._attacking = true;
       }
       this._ai(e, dt, player, game, e._attacking);
