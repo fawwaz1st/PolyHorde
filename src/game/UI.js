@@ -1,4 +1,13 @@
 // UI: HUD diegetik (auto-fade di luar tempur), reticle reaktif, menu modern, settings
+// Line-style SVG icons (stroke currentColor) — sistem ikon HUD
+export const ICONS = {
+  dash: '<svg viewBox="0 0 24 24"><path d="M4 12h6M8 8l4 4-4 4M14 4v16M18 4v16" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  shield: '<svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  grenade: '<svg viewBox="0 0 24 24"><circle cx="12" cy="14" r="6"/><path d="M12 8V4M9 4h6" stroke-linecap="round"/></svg>',
+  hp: '<svg viewBox="0 0 24 24"><path d="M12 20s-7-4.5-7-10a4 4 0 017-2.6A4 4 0 0119 10c0 5.5-7 10-7 10z" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  wave: '<svg viewBox="0 0 24 24"><path d="M3 12c2-4 4-4 6 0s4 4 6 0 4-4 6 0" stroke-linecap="round"/></svg>',
+};
+
 export class UI {
   constructor() {
     this.el = {
@@ -171,7 +180,19 @@ export class UI {
     const dashCd = Math.max(0, game.player.dashCd);
     const shieldCd = Math.max(0, game.player.shieldCd);
     const abTxt = 'Q ' + dashCd.toFixed(0) + '  E ' + shieldCd.toFixed(0) + '  F ' + game.grenades;
-    if (abTxt !== this._last.abTxt) { this.el.abilities.textContent = abTxt; this._last.abTxt = abTxt; }
+    if (abTxt !== this._last.abTxt) {
+      this.el.abilities.innerHTML = '';
+      const mk = (key, icon, cd, ready) => {
+        const div = document.createElement('div');
+        div.className = 'ab-icon' + (ready ? ' ready' : '');
+        div.innerHTML = icon + '<div class="ab-cd">' + key + (cd > 0 ? ' ' + cd.toFixed(0) : '') + '</div>';
+        this.el.abilities.appendChild(div);
+      };
+      mk('Q', ICONS.dash, dashCd, dashCd <= 0);
+      mk('E', ICONS.shield, shieldCd, shieldCd <= 0);
+      mk('F', ICONS.grenade, 0, game.grenades > 0);
+      this._last.abTxt = abTxt;
+    }
 
     // Objective
     if (game.objective && game.objective !== this._last.obj) {

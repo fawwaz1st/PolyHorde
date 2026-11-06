@@ -207,7 +207,13 @@ body.paused #radar::before { animation-play-state: paused; }
     <div id="weapon-name">PISTOL</div>
     <div id="ammo">9 / 9</div>
   </div>
-  <div id="abilities" style="position:absolute;bottom:1.2rem;right:1.2rem;font-family:var(--mono);font-size:0.75rem;color:var(--dim);text-align:right;letter-spacing:0.05em"></div>
+  <div id="abilities" style="position:absolute;bottom:1.2rem;right:1.2rem;font-family:var(--mono);font-size:0.75rem;color:var(--dim);text-align:right;letter-spacing:0.05em;display:flex;gap:0.6rem;align-items:flex-end"></div>
+  <style>
+    .ab-icon { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; }
+    .ab-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 2; }
+    .ab-icon .ab-cd { font-size: 0.65rem; color: var(--dim); }
+    .ab-icon.ready svg { stroke: var(--good); }
+  </style>
   <div class="corner bl">
     <div id="radar"></div>
   </div>
