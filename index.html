@@ -290,6 +290,23 @@ body.paused #radar::before { animation-play-state: paused; }
   </div>
 </div>
 
+<div id="intro" class="overlay" style="background:#000;flex-direction:column;z-index:200">
+  <div id="intro-text" style="text-align:center;color:var(--text);opacity:0;transition:opacity 0.7s ease;max-width:34rem;padding:0 2rem">
+    <div id="intro-title" style="font-size:2.2rem;font-weight:800;letter-spacing:0.25em;margin-bottom:0.8rem"></div>
+    <div id="intro-sub" style="color:var(--dim);font-size:0.95rem;line-height:1.6"></div>
+  </div>
+  <button id="intro-skip" class="ghost-btn" style="position:absolute;bottom:2rem;right:2rem;opacity:0.6">LEWATI</button>
+</div>
+
+<div id="outro" class="overlay" style="background:#000;display:none;flex-direction:column;z-index:200">
+  <div style="text-align:center;max-width:36rem;padding:0 2rem">
+    <div style="font-size:2.5rem;font-weight:800;letter-spacing:0.2em;margin-bottom:1rem;color:var(--accent2)" id="outro-title">GAME OVER</div>
+    <div style="color:var(--dim);line-height:1.7;margin-bottom:1.5rem" id="outro-text"></div>
+    <div style="font-family:var(--mono);font-size:1rem;line-height:2;color:var(--text)" id="outro-stats"></div>
+    <button class="play-btn" id="outro-restart" style="margin-top:2rem">MAIN LAGI</button>
+  </div>
+</div>
+
 <div id="draft" class="overlay">
   <div style="text-align:center;padding:2rem 2.5rem;background:var(--panel);border:1px solid var(--line);border-radius:16px">
     <h2 style="font-size:1.2rem;letter-spacing:0.2em;margin-bottom:0.5rem">PILIH UPGRADE</h2>

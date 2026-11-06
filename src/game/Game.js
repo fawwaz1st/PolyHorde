@@ -117,8 +117,36 @@ export class Game {
     });
 
     this.ui.showMenu();
+    this._introPlayed = false;
     this._loop = this._loop.bind(this);
     requestAnimationFrame(this._loop);
+  }
+
+  // Intro cinematic: 3 kartu cerita dengan fade
+  _playIntro() {
+    const el = document.getElementById('intro');
+    const title = document.getElementById('intro-title');
+    const sub = document.getElementById('intro-sub');
+    if (!el || !title || !sub) return;
+    const cards = [
+      { t: 'TAHUN 2087', s: 'Peradaban runtuh. Arena menjadi tempat terakhir manusia membuktikan diri.' },
+      { t: 'POLYHORDE', s: 'Gelombang demi gelombang, kau bertahan. Setiap kill menambah kekuatanmu.' },
+      { t: 'BABAK I — AWAKENING', s: 'Mereka datang dari kegelapan. Jangan biarkan mereka mendekat.' },
+    ];
+    el.classList.add('show');
+    let ci = 0;
+    const showCard = () => {
+      if (ci >= cards.length) { el.classList.remove('show'); return; }
+      title.textContent = cards[ci].t;
+      sub.textContent = cards[ci].s;
+      title.style.opacity = '1'; sub.style.opacity = '1';
+      ci++;
+      setTimeout(() => { title.style.opacity = '0'; sub.style.opacity = '0'; setTimeout(showCard, 500); }, 2000);
+    };
+    showCard();
+    const skip = () => { ci = 999; el.classList.remove('show'); title.style.opacity = '0'; sub.style.opacity = '0'; el.removeEventListener('click', skip); document.getElementById('intro-skip')?.removeEventListener('click', skip); };
+    el.addEventListener('click', skip);
+    document.getElementById('intro-skip')?.addEventListener('click', skip);
   }
 
   _pickLayout() {
@@ -176,11 +204,12 @@ export class Game {
     this.weapons.reset();
     this.enemies.reset();
     this.effects.count = 0;
-    this.waveCooldown = 1.6;
+    this.waveCooldown = 4.0;
     this._waveIncoming = true;
     this._nextWave = 1;
     this.objective = 'Bertahan: wave 1. Pelajari pola spawn.';
     this.ui.hideMenu();
+    if (!this._introPlayed) { this._introPlayed = true; this._playIntro(); }
     this.ui.hideGameOver();
     this.ui.showHUD();
     this.ui.announce('WAVE 1', '— 7 musuh —', true);
@@ -197,6 +226,14 @@ export class Game {
   }
 
   _gameOver() {
+    // Outro cinematic: ringkasan run
+    const outro = document.getElementById('outro');
+    if (outro) {
+      document.getElementById('outro-title').textContent = 'GAME OVER';
+      document.getElementById('outro-text').textContent = 'Kau jatuh di wave ' + this.wave + '. Arena tetap berdiri, tapi kisahmu belum selesai.';
+      document.getElementById('outro-stats').innerHTML = 'WAVE <b>' + this.wave + '</b><br>SCORE <b>' + this.score + '</b><br>KILL <b>' + this.kills + '</b>';
+      outro.style.display = 'flex';
+    }
     if (this.state === STATE.GAMEOVER) return;
     this.state = STATE.GAMEOVER;
     document.exitPointerLock?.();
