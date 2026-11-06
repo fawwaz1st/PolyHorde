@@ -174,8 +174,8 @@ export class Game {
   _draft() {
     const pool = [
       { id: 'hp',     name: 'Vitality',   desc: 'Max HP +20',                 apply: () => { this.upgrades.maxHp += 0.2; this.player.maxHp = Math.round(100 * this.upgrades.maxHp); this.player.heal(20); } },
-      { id: 'damage', name: 'Amplifier',  desc: 'Semua damage +15%',          apply: () => { this.upgrades.damage += 0.15; } },
-      { id: 'rate',   name: 'Trigger',    desc: 'Fire rate +12%',           apply: () => { this.upgrades.fireRate -= 0.12; } },
+      { id: 'damage', name: 'Amplifier',  desc: 'Semua damage +15%',          apply: () => { this.upgrades.damage = Math.min(2.5, this.upgrades.damage + 0.15); } },
+      { id: 'rate',   name: 'Trigger',    desc: 'Fire rate +12%',           apply: () => { this.upgrades.fireRate = Math.max(0.55, this.upgrades.fireRate - 0.12); } },
       { id: 'dash',   name: 'Reflex',     desc: 'Dash cooldown -25%',       apply: () => { this.player.dashCdMax *= 0.75; } },
       { id: 'reload', name: 'Fast Hands', desc: 'Reload -20%',              apply: () => { this.upgrades.reload *= 0.8; } },
       { id: 'speed',  name: 'Boots',      desc: 'Move speed +8%',           apply: () => { this.upgrades.speed += 0.08; } },
@@ -362,7 +362,7 @@ export class Game {
     // Tabrakan musuh -> damage
     if (!this.player.shieldActive) {
       for (const e of this.enemies.list) {
-        if (e.pos.distanceTo(this.player.position) < e.def.size + 0.7) {
+        if (e.pos.distanceTo(this.player.position) < e.def.size + 0.7 && e._attacking) {
           this.player.takeDamage(e.def.collision * dt);
           this.hurtPlayer(e.pos);
         }
@@ -510,6 +510,10 @@ export class Game {
       const dist = Math.hypot(dx, dz);
       if (dist < 10) continue;
       if (Math.hypot(x, z) < 3) continue;
+      // Jauh dari prop (radius 1.2m): hindari musuh terjepit
+      let nearProp = false;
+      for (const p of this.world.props) { if (Math.hypot(x - p.x, z - p.z) < p.radius + 0.7) { nearProp = true; break; } }
+      if (nearProp) continue;
       // Hindari depan mata
       const ang = Math.atan2(dx, dz);
       let rel = (ang - this.player.yaw) % (Math.PI * 2);

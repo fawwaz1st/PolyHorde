@@ -128,7 +128,7 @@ export class Weapons {
       const sx = (Math.random() - 0.5) * w.spread * 2;
       const sy = (Math.random() - 0.5) * w.spread * 2;
       this._dir.set(sx, sy, -1).applyQuaternion(this.engine.camera.quaternion).normalize();
-      this._ray.set(this.player.position, this._dir);
+      this._ray.set(this.engine.camera.position, this._dir);
       this._ray.far = 80;
 
       if (this._targetsVersion !== game.enemies.list.length) {
@@ -151,7 +151,7 @@ export class Weapons {
           const dist = h.distance;
           const falloff = dist > 25 ? Math.max(0.7, 1 - (dist - 25) / 35 * 0.3) : 1;
           const dmg = w.damage * (this.game?.upgrades?.damage || 1) * falloff * (hitHead ? 1.5 : 1);
-          enemy.damage(dmg, w.kb, this._dir);
+          this.game.enemies.damage(enemy, dmg, w.kb, this._dir);
           if (hitHead) this.effects.damageNumber(h.point, Math.round(dmg), 'crit');
           this.effects.impact(h.point, w.color);
           this.audio.hit(h.point);
@@ -165,8 +165,8 @@ export class Weapons {
         }
       } else {
         // Tracer
-        const end = this._tmp.copy(this.player.position).addScaledVector(this._dir, 50);
-        this.effects.tracer(this.player.position, end, w.color);
+        const end = this._tmp.copy(this.engine.camera.position).addScaledVector(this._dir, 50);
+        this.effects.tracer(this.engine.camera.position, end, w.color);
       }
     }
   }
@@ -222,7 +222,7 @@ export class Weapons {
         for (let j = game.enemies.list.length - 1; j >= 0; j--) {
           const e = game.enemies.list[j];
           const d = r.mesh.position.distanceTo(e.group.position);
-          if (d < r.radius) e.damage(r.damage * (1 - d / r.radius), 0.5);
+          if (d < r.radius) this.game.enemies.damage(e, r.damage * (1 - d / r.radius), 0.5);
         }
         const pd = r.mesh.position.distanceTo(this.player.position);
         if (pd < r.radius) this.player.takeDamage(r.damage * (1 - pd / r.radius) * r.selfMul);

@@ -130,6 +130,9 @@ export class Player {
     const spdMul = zone.slow ? 0.55 : 1;
 
     // --- Gravity ---
+    // justFired: pulse singkat (0,25s)
+    if (this._justFiredT > 0) { this._justFiredT -= dt; if (this._justFiredT <= 0) this.justFired = false; }
+
     this.vel.y += GRAVITY * dt;
 
     // Integrasi + substep
