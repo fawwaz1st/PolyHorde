@@ -8,7 +8,7 @@ export function stylized(color, opts = {}) {
     metalness: opts.metalness ?? 0.1,
     flatShading: true,
     emissive: opts.emissive ?? color,
-    emissiveIntensity: opts.emissiveIntensity ?? 0.08,
+    emissiveIntensity: opts.emissiveIntensity ?? 0.05,
   });
 }
 

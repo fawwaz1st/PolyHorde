@@ -175,7 +175,8 @@ export class Effects {
       const dy = player.position.y - s.mesh.position.y;
       const dz = player.position.z - s.mesh.position.z;
       const d2 = dx * dx + dy * dy + dz * dz;
-      const magnetR = 6;
+      const shardUp = player.game?.upgrades?.shard || 1;
+      const magnetR = 6 + (shardUp - 1) * 3;
       if (d2 < magnetR * magnetR) {
         const d = Math.sqrt(d2) || 1;
         const t = 1 - d / magnetR;

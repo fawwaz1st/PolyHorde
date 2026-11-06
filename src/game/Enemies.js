@@ -18,6 +18,7 @@ export class Enemies {
     this.world = world;
     this.audio = audio;
     this.effects = effects;
+    this.game = null; // di-set Game
     this.list = [];
     this._dying = [];
     this.projectiles = [];
@@ -81,8 +82,8 @@ export class Enemies {
     // Boss phase: summon adds di 66% & 33% HP
     if (e.type === 'boss' && e.alive) {
       const pct = e.hp / e.maxHp;
-      if (pct < 0.66 && !e.ph1) { e.ph1 = true; this._bossPhase(e, game); }
-      if (pct < 0.33 && !e.ph2) { e.ph2 = true; this._bossPhase(e, game); }
+      if (pct < 0.66 && !e.ph1) { e.ph1 = true; this._bossPhase(e, this.game); }
+      if (pct < 0.33 && !e.ph2) { e.ph2 = true; this._bossPhase(e, this.game); }
     }
     if (e.hp <= 0) this._kill(e);
   }
@@ -219,11 +220,18 @@ export class Enemies {
 
     switch (def.type) {
       case 'melee': {
-        // Charge (heavy & boss)
-        if ((e.type === 'heavy' || e.type === 'boss') && dist > 5 && dist < (e.type === 'boss' ? 16 : 12) && e.attackCd <= 0) {
-          e.windup = 0.25; // windup telegraph sebelum charge
+        // Charge (heavy & boss) — windup dulu, baru meluncur
+        if ((e.type === 'heavy' || e.type === 'boss') && dist > 5 && dist < (e.type === 'boss' ? 16 : 12) && e.attackCd <= 0 && !e.charge && !e.windup) {
+          e.windup = 0.25; // telegraph
+        }
+        if (e.windup > 0) {
+          e.windup -= dt;
+          e.group.scale.set(1.15, 1.15, 1.15);
+          if (e.windup <= 0) { e.charge = true; e.chargeT = e.type === 'boss' ? 1.1 : 0.8; e.windup = 0; }
+          break;
         }
         if (e.charge) {
+          e.group.scale.set(1, 1, 1);
           e.chargeT -= dt;
           const mul = e.type === 'boss' ? 5 : 4;
           e.pos.x += nx * e.speed * mul * dt;

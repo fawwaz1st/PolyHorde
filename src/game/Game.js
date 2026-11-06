@@ -68,6 +68,7 @@ export class Game {
     this.weapons = new Weapons(this.engine, this.player, this.audio, this.effects);
     this.weapons.game = this;
     this.enemies = new Enemies(this.engine, this.world, this.audio, this.effects);
+    this.enemies.game = this;
 
     // Events
     Events.on('enemy-killed', (d) => {
@@ -135,16 +136,27 @@ export class Game {
     ];
     el.classList.add('show');
     let ci = 0;
+    let skipped = false;
+    const timers = [];
+    const later = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); };
     const showCard = () => {
+      if (skipped) return;
       if (ci >= cards.length) { el.classList.remove('show'); return; }
       title.textContent = cards[ci].t;
       sub.textContent = cards[ci].s;
       title.style.opacity = '1'; sub.style.opacity = '1';
       ci++;
-      setTimeout(() => { title.style.opacity = '0'; sub.style.opacity = '0'; setTimeout(showCard, 500); }, 2000);
+      later(() => { title.style.opacity = '0'; sub.style.opacity = '0'; later(showCard, 500); }, 2200);
     };
     showCard();
-    const skip = () => { ci = 999; el.classList.remove('show'); title.style.opacity = '0'; sub.style.opacity = '0'; el.removeEventListener('click', skip); document.getElementById('intro-skip')?.removeEventListener('click', skip); };
+    const skip = () => {
+      skipped = true;
+      timers.forEach(clearTimeout);
+      el.classList.remove('show');
+      title.style.opacity = '0'; sub.style.opacity = '0';
+      el.removeEventListener('click', skip);
+      document.getElementById('intro-skip')?.removeEventListener('click', skip);
+    };
     el.addEventListener('click', skip);
     document.getElementById('intro-skip')?.addEventListener('click', skip);
   }
@@ -200,7 +212,10 @@ export class Game {
     this.grenades = 3; this.grenadeCd = 0;
     this.grenadeList.forEach(g => this.engine.scene.remove(g.mesh));
     this.grenadeList = [];
+    this.upgradesInit();
     this.player.reset();
+    this.player.maxHp = 100;
+    this.player.dashCdMax = 2.2;
     this.weapons.reset();
     this.enemies.reset();
     this.effects.count = 0;
@@ -209,6 +224,8 @@ export class Game {
     this._nextWave = 1;
     this.objective = 'Bertahan: wave 1. Pelajari pola spawn.';
     this.ui.hideMenu();
+    const outro = document.getElementById('outro');
+    if (outro) outro.style.display = 'none';
     if (!this._introPlayed) { this._introPlayed = true; this._playIntro(); }
     this.ui.hideGameOver();
     this.ui.showHUD();

@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { pass } from 'three/tsl';
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js';
 
-// Engine: renderer + scene + camera + post-processing (bloom + FXAA)
+// Engine: renderer + scene + camera + post-processing (bloom + res scale)
 export class Engine {
   constructor(canvas) {
     const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
@@ -30,11 +30,11 @@ export class Engine {
 
   async init() {
     await this.renderer.init();
-    // Post-processing: bloom (emisi) + FXAA
+    // Post-processing: bloom (emisi)
     try {
       const scenePass = pass(this.scene, this.camera);
       const sceneColor = scenePass.getTextureNode('output');
-      const bloomPass = bloom(scenePass, 0.5, 0.35, 0.75);
+      const bloomPass = bloom(scenePass, 0.85, 0.4, 0.55);
       const outputNode = sceneColor.add(bloomPass);
       this.pipeline = new THREE.RenderPipeline(this.renderer, outputNode);
       if (typeof bloomPass.setResolutionScale === 'function') bloomPass.setResolutionScale(0.35);
