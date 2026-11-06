@@ -62,7 +62,7 @@ export class Game {
 
   async init() {
     await this.engine.init();
-    this.world = new World(this.engine.scene);
+    this.world = new World(this.engine.scene, this._pickLayout());
     this.player = new Player(this.engine, this.input, this.world, this.audio);
     this.player.game = this;
     this.weapons = new Weapons(this.engine, this.player, this.audio, this.effects);
@@ -119,6 +119,11 @@ export class Game {
     this.ui.showMenu();
     this._loop = this._loop.bind(this);
     requestAnimationFrame(this._loop);
+  }
+
+  _pickLayout() {
+    const layouts = ['central', 'lava_core', 'crossfire'];
+    return layouts[(Math.random() * layouts.length) | 0];
   }
 
   upgradesInit() {
@@ -409,6 +414,11 @@ export class Game {
       this.objective = 'Wave ' + this._nextWave + ' sebentar lagi...';
       this.ui.announce('WAVE ' + this._nextWave, '— ' + this.enemies.waveSize(this._nextWave) + ' musuh —', true);
       this.ui.showHint('Ring merah = musuh akan muncul di sini.');
+      // Chapter story: judul chapter + lore singkat
+      if (this._nextWave === 1) { this.ui.announce('BABAK I — AWAKENING', 'Selamatkan arena dari gelombang pertama.', true); }
+      else if (this._nextWave === 5) { this.ui.announce('BABAK II — THE HORDE', 'Boss pertama mendekat. Bertahanlah.', true); }
+      else if (this._nextWave === 10) { this.ui.announce('BABAK III — OVERRUN', 'Gelombang tanpa akhir. Buktikan dirimu.', true); }
+      else if (this._nextWave === 15) { this.ui.announce('BABAK IV — NIGHTMARE', 'Hanya yang terkuat bertahan.', true); }
       this.audio.waveClear();
       this.score += this.wave * 50;
       this.grenades = 3;

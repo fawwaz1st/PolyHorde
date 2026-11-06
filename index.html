@@ -235,6 +235,9 @@ body.paused #radar::before { animation-play-state: paused; }
     </div>
     <div class="subtitle">Arena FPS &middot; Stylized Low-Poly</div>
     <button class="play-btn" id="play-btn">MAIN</button>
+    <div style="margin-top:1.2rem;display:flex;gap:0.6rem;justify-content:center">
+      <button class="ghost-btn" id="menu-settings">Pengaturan</button>
+    </div>
     <div class="controls-grid">
       <div><b>WASD</b> gerak</div><div><b>Mouse</b> lihat / tembak</div>
       <div><b>Shift</b> sprint</div><div><b>Space</b> lompat</div>
@@ -253,6 +256,8 @@ body.paused #radar::before { animation-play-state: paused; }
       <label>Sensitivitas <input type="range" id="set-sens" min="0.3" max="3" step="0.1" value="1"></label>
       <label>Volume <input type="range" id="set-vol" min="0" max="1" step="0.05" value="0.8"></label>
       <label>Bisukan <input type="checkbox" id="set-mute"></label>
+      <label>FOV <input type="range" id="set-fov" min="70" max="100" step="1" value="78"></label>
+      <label>Render Scale <input type="range" id="set-renderscale" min="0.5" max="1" step="0.05" value="1"></label>
       <label>Reduced motion <input type="checkbox" id="set-reduced"></label>
       <label>Tama Crosshair <input type="range" id="set-cross" min="0.5" max="2" step="0.1" value="1"></label>
       <label>Warna Crosshair

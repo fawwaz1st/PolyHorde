@@ -4,11 +4,12 @@ import { buildProp } from '../core/Models.js';
 
 // World: arena stylized dengan zona, cover, dan lighting modern
 export class World {
-  constructor(scene) {
+  constructor(scene, layout = 'central') {
     this.scene = scene;
     this.props = [];      // { mesh, x, z, radius } untuk collision & cover
     this.platforms = [];  // { x, z, top, half } platform tinggi
     this.zones = [];      // { x, z, r, type } zona lava/ice
+    this.layout = layout; // 'central' | 'lava_core' | 'crossfire'
     this._build();
   }
 
@@ -149,9 +150,10 @@ export class World {
       new THREE.MeshBasicMaterial({ color: 0xff4400, transparent: true, opacity: 0.35, toneMapped: false })
     );
     lava.rotation.x = -Math.PI / 2;
-    lava.position.set(-12, 0.015, -10);
+    const lavaPos = this.layout === 'lava_core' ? [0, 0] : [-12, -10];
+    lava.position.set(lavaPos[0], 0.015, lavaPos[1]);
     this.scene.add(lava);
-    this.zones = [{ x: -12, z: -10, r: 4, type: 'lava' }];
+    this.zones = [{ x: lavaPos[0], z: lavaPos[1], r: this.layout === 'lava_core' ? 5.5 : 4, type: 'lava' }];
 
     // Zona ice (biru): memperlambat
     const ice = new THREE.Mesh(
@@ -159,12 +161,16 @@ export class World {
       new THREE.MeshBasicMaterial({ color: 0x44ccff, transparent: true, opacity: 0.3, toneMapped: false })
     );
     ice.rotation.x = -Math.PI / 2;
-    ice.position.set(12, 0.015, 10);
+    const icePos = this.layout === 'lava_core' ? [14, 14] : [12, 10];
+    ice.position.set(icePos[0], 0.015, icePos[1]);
     this.scene.add(ice);
-    this.zones.push({ x: 12, z: 10, r: 4, type: 'ice' });
+    this.zones.push({ x: icePos[0], z: icePos[1], r: 4, type: 'ice' });
 
     // Platform tinggi (bisa di lompat)
-    for (const [px, pz, ph] of [[-8, 8, 0.9], [8, -8, 0.9], [0, 12, 1.4], [0, -12, 1.4]]) {
+    const platLayout = this.layout === 'crossfire'
+      ? [[-10, 0, 0.9], [10, 0, 0.9], [0, 10, 0.9], [0, -10, 0.9], [0, 0, 1.4]]
+      : [[-8, 8, 0.9], [8, -8, 0.9], [0, 12, 1.4], [0, -12, 1.4]];
+    for (const [px, pz, ph] of platLayout) {
       const plat = new THREE.Mesh(
         new THREE.BoxGeometry(3, ph, 3),
         new THREE.MeshStandardMaterial({ color: 0x2a3a5a, roughness: 0.7, flatShading: true })

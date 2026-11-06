@@ -233,9 +233,10 @@ export class UI {
       dot.style.transform = 'translate(-50%,-50%)';
       const big = s.e.type === 'heavy' || s.e.type === 'boss';
       dot.style.width = dot.style.height = big ? '9px' : '6px';
-      dot.style.background = s.e.type === 'bomber' ? '#4ade80' : s.e.type === 'boss' ? '#fbbf24' : s.e.type === 'heavy' ? '#c084fc' : '#f87171';
-      dot.style.border = s.e.type === 'bomber' ? '2px solid #4ade80' : 'none';
-      dot.style.borderRadius = s.e.type === 'bomber' ? '50%' : '2px';
+      // Warna bahaya (bukan hijau): bomber merah-orange, boss kuning, heavy ungu, grunt merah
+      dot.style.background = s.e.type === 'bomber' ? '#ff5522' : s.e.type === 'boss' ? '#fbbf24' : s.e.type === 'heavy' ? '#c084fc' : '#f87171';
+      dot.style.border = s.e.type === 'bomber' ? '2px solid #ff5522' : 'none';
+      dot.style.borderRadius = s.e.type === 'bomber' ? '50%' : s.e.type === 'heavy' ? '0px' : '2px';
     }
     // Telegraf
     for (let i = 0; i < (game.spawnQueue?.length || 0) && di < 18; i++) {
