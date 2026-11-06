@@ -64,6 +64,16 @@ export class Enemies {
     };
     group.userData.enemy = e;
     this.list.push(e);
+    // Volume raycast eksplisit: proxy SEBAGAI SIBLING dari group (bukan anak),
+    // agar scale/death-anim group (shrink+sink) tidak mengecilkan hit-volume-nya.
+    // Invisible (visible=false) agar tidak di-render tapi tetap bisa di-raycast (raycast tidak cek visibility).
+    const proxy = new THREE.Mesh(new THREE.SphereGeometry(def.size * 0.85, 6, 4),
+      new THREE.MeshBasicMaterial({ visible: false }));
+    proxy.userData.enemy = e;
+    proxy.userData.isHitProxy = true;
+    proxy.position.set(x, def.height * 0.5 + def.size, z);
+    this.game.engine.scene.add(proxy);
+    e.hitProxy = proxy;
     return e;
   }
 
@@ -130,6 +140,7 @@ export class Enemies {
       e.group.position.y -= dt * 1.2; // tenggelam
       if (d.t <= 0) {
         this.engine.scene.remove(e.group);
+        if (e.hitProxy) { this.game.engine.scene.remove(e.hitProxy); e.hitProxy.geometry.dispose(); }
         this._dying.splice(i, 1);
       }
     }
@@ -139,6 +150,7 @@ export class Enemies {
     const i = this.list.indexOf(e);
     if (i > -1) this.list.splice(i, 1);
     this.engine.scene.remove(e.group);
+    if (e.hitProxy) { this.game.engine.scene.remove(e.hitProxy); e.hitProxy.geometry.dispose(); }
   }
 
   explode(e) {
@@ -198,6 +210,11 @@ export class Enemies {
     }
     this._updateDying(dt);
     this._updateProjectiles(dt, player, game);
+    // Sinkronkan volume raycast proxy (sibling, tak ikut animasi group)
+    for (let i = 0; i < this.list.length; i++) {
+      const x = this.list[i];
+      if (x.hitProxy) x.hitProxy.position.set(x.pos.x, x.pos.y + x.def.height * 0.5, x.pos.z);
+    }
   }
 
   _ai(e, dt, player, game, hasToken = true) {

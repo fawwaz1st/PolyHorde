@@ -22,6 +22,7 @@ export class Weapons {
     this.reloading = false;
     this.reloadT = 0;
     this._ray = new THREE.Raycaster();
+    this._ray.firstHitOnly = true; // perf: raycast berhenti saat hit pertama
     this._dir = new THREE.Vector3();
     this._tmp = new THREE.Vector3();
     this._targets = [];
@@ -131,22 +132,20 @@ export class Weapons {
       this._ray.set(this.engine.camera.position, this._dir);
       this._ray.far = 80;
 
-      if (this._targetsVersion !== game.enemies.list.length) {
-        this._targets.length = 0;
-        const ml = game.enemies.list;
-        for (let i = 0; i < ml.length; i++) this._targets.push(ml[i].group);
-        const wl = game.world.props;
-        for (let i = 0; i < wl.length; i++) this._targets.push(wl[i].mesh);
-        this._targetsVersion = game.enemies.list.length;
-      }
+      this._targets.length = 0;
+      const ml = game.enemies.list;
+      for (let i = 0; i < ml.length; i++) if (ml[i].hitProxy) this._targets.push(ml[i].hitProxy);
+      const wl = game.world.props;
+      for (let i = 0; i < wl.length; i++) this._targets.push(wl[i].mesh);
 
       const hits = this._ray.intersectObjects(this._targets, true);
       if (hits.length > 0) {
         const h = hits[0];
         let obj = h.object;
         while (obj && !obj.userData.enemy && obj.parent) obj = obj.parent;
-        if (obj?.userData.enemy) {
-          const enemy = obj.userData.enemy;
+        if (!obj) continue;
+        const enemy = obj.userData.enemy;
+        if (enemy) {
           const hitHead = h.point.y > enemy.pos.y + enemy.def.height * 0.55;
           const dist = h.distance;
           const falloff = dist > 25 ? Math.max(0.7, 1 - (dist - 25) / 35 * 0.3) : 1;

@@ -24,3 +24,4 @@ dist/
 # OS
 Thumbs.db
 desktop.ini
+_qa.cjs
