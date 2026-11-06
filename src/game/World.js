@@ -130,6 +130,19 @@ export class World {
       this.props.push({ mesh: crate, x, z, radius: 0.9, destructible: true, hp: 30, kind: 'crate' });
     }
 
+    // Barrel eksplosif: chain ke musuh & crate terdekat
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 1.5;
+      const r = 6 + i * 1.5;
+      const x = Math.cos(a) * r, z = Math.sin(a) * r;
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.9, 8),
+        new THREE.MeshStandardMaterial({ color: 0xaa3322, roughness: 0.6, emissive: 0x661111, emissiveIntensity: 0.3 }));
+      barrel.position.set(x, 0.45, z);
+      barrel.castShadow = true; barrel.receiveShadow = true;
+      this.scene.add(barrel);
+      this.props.push({ mesh: barrel, x, z, radius: 0.5, destructible: true, hp: 20, kind: 'barrel' });
+    }
+
     // Zona lava (merah/oranye): berbahaya
     const lava = new THREE.Mesh(
       new THREE.CircleGeometry(4, 24),

@@ -78,7 +78,25 @@ export class Enemies {
       e.pos.addScaledVector(this._v, knockback);
       if (e.type === 'heavy' || e.type === 'boss') e.pos.addScaledVector(this._v, -knockback * 0.5);
     }
+    // Boss phase: summon adds di 66% & 33% HP
+    if (e.type === 'boss' && e.alive) {
+      const pct = e.hp / e.maxHp;
+      if (pct < 0.66 && !e.ph1) { e.ph1 = true; this._bossPhase(e, game); }
+      if (pct < 0.33 && !e.ph2) { e.ph2 = true; this._bossPhase(e, game); }
+    }
     if (e.hp <= 0) this._kill(e);
+  }
+
+  _bossPhase(boss, game) {
+    this.effects.explosion(boss.pos, boss.def.radius || 3);
+    this.audio.explosion(boss.pos, true);
+    game.shake.add(0.6);
+    boss.speed *= 1.15;
+    for (let i = 0; i < 2; i++) {
+      const a = Math.random() * Math.PI * 2;
+      this.spawn('grunt', boss.pos.x + Math.cos(a) * 2, boss.pos.z + Math.sin(a) * 2, 1, 1.1);
+    }
+    game.ui.announce('BOSS FASE ' + (boss.ph2 ? '2' : '1'), '— horde tambahan —');
   }
 
   _kill(e) {
